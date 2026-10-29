@@ -15,7 +15,7 @@ function waitForMockUpdateRequest(page: Page) {
 }
 
 async function openConnectedDemo(page: Page) {
-  await page.goto('/')
+  await page.goto('/diagnostico')
   await expect(page.getByTestId('socket-status')).toHaveText('Socket: conectado')
   await expect(page.getByTestId('demo-nft-version')).toHaveText('1')
 }

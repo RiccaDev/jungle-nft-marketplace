@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DiagnosticoRouteImport } from './routes/diagnostico'
+import { Route as NftsNftIdRouteImport } from './routes/nfts.$nftId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DiagnosticoRoute = DiagnosticoRouteImport.update({
+  id: '/diagnostico',
+  path: '/diagnostico',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NftsNftIdRoute = NftsNftIdRouteImport.update({
+  id: '/nfts/$nftId',
+  path: '/nfts/$nftId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/diagnostico': typeof DiagnosticoRoute
+  '/nfts/$nftId': typeof NftsNftIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/diagnostico': typeof DiagnosticoRoute
+  '/nfts/$nftId': typeof NftsNftIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/diagnostico': typeof DiagnosticoRoute
+  '/nfts/$nftId': typeof NftsNftIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/diagnostico' | '/nfts/$nftId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/diagnostico' | '/nfts/$nftId'
+  id: '__root__' | '/' | '/diagnostico' | '/nfts/$nftId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiagnosticoRoute: typeof DiagnosticoRoute
+  NftsNftIdRoute: typeof NftsNftIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/diagnostico': {
+      id: '/diagnostico'
+      path: '/diagnostico'
+      fullPath: '/diagnostico'
+      preLoaderRoute: typeof DiagnosticoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nfts/$nftId': {
+      id: '/nfts/$nftId'
+      path: '/nfts/$nftId'
+      fullPath: '/nfts/$nftId'
+      preLoaderRoute: typeof NftsNftIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiagnosticoRoute: DiagnosticoRoute,
+  NftsNftIdRoute: NftsNftIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

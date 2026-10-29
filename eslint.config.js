@@ -25,6 +25,9 @@ export default defineConfig([
       ecmaVersion: 2022,
       globals: globals.browser,
     },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
   },
   {
     // TanStack Router route files export `Route` alongside components;

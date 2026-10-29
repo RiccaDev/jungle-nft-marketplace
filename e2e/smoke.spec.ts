@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('renders the API status served by the MSW mock', async ({ page }) => {
   const healthResponse = page.waitForResponse((response) => response.url().endsWith('/api/health'))
 
-  await page.goto('/')
+  await page.goto('/diagnostico')
 
   expect((await healthResponse).status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Status da API' })).toBeVisible()
