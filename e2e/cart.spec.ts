@@ -154,7 +154,7 @@ test.describe('carrinho no desktop', () => {
     await addFromDetail(page, 'emerald-ape-042', 2)
     await socketConnected
     await expect(page.getByTestId('quote-total')).toHaveText('2.392 ETH')
-    await expect(page.getByTestId('checkout-readiness')).toHaveText('O pagamento será habilitado na próxima etapa.')
+    await expect(page.getByRole('link', { name: 'Conectar e finalizar' })).toHaveAttribute('href', '/pagamento')
 
     await triggerMarketChange(page, 'emerald-ape-042')
     const line = cartLine(page, 'Emerald Ape #042')

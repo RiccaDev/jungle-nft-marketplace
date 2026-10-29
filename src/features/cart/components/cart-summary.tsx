@@ -15,8 +15,6 @@ type CartSummaryProps = {
   variant: 'desktop' | 'mobile'
 }
 
-const CHECKOUT_UNAVAILABLE_REASON = 'O pagamento será habilitado na próxima etapa.'
-
 function SummaryRow({ label, value, testId, emphasis = false }: {
   label: string
   value: string | undefined
@@ -41,13 +39,12 @@ function CheckoutAction({ cart, quote, variant }: CartSummaryProps) {
     variant === 'desktop' ? 'h-10 rounded-[5px]' : 'h-[60px] rounded-[10px]',
   )
 
+  const enabledClass = cn(buttonClass, 'hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none')
+
+  // Checkout is private: visitors sign in first and land on the payment page afterwards.
   if (status !== 'authenticated') {
     return (
-      <Link
-        to="/entrar"
-        search={{ redirect: '/carrinho' }}
-        className={cn(buttonClass, 'hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none')}
-      >
+      <Link to="/entrar" search={{ redirect: '/pagamento' }} className={enabledClass}>
         Conectar e finalizar
       </Link>
     )
@@ -58,17 +55,23 @@ function CheckoutAction({ cart, quote, variant }: CartSummaryProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <button
-        type="button"
-        aria-disabled="true"
-        aria-describedby={reasonId}
-        onClick={(event) => event.preventDefault()}
-        className={cn(buttonClass, 'cursor-not-allowed opacity-60')}
-      >
-        Conectar e finalizar
-      </button>
-      <p id={reasonId} data-testid="checkout-readiness" className="text-center text-xs text-text-secondary">
-        {readiness.isReady ? CHECKOUT_UNAVAILABLE_REASON : readiness.reason}
+      {readiness.isReady ? (
+        <Link to="/pagamento" className={enabledClass}>
+          Conectar e finalizar
+        </Link>
+      ) : (
+        <button
+          type="button"
+          aria-disabled="true"
+          aria-describedby={reasonId}
+          onClick={(event) => event.preventDefault()}
+          className={cn(buttonClass, 'cursor-not-allowed opacity-60')}
+        >
+          Conectar e finalizar
+        </button>
+      )}
+      <p id={reasonId} data-testid="checkout-readiness" className="text-center text-xs text-text-secondary empty:hidden">
+        {readiness.isReady ? null : readiness.reason}
       </p>
       {canRefreshQuote && (
         <button type="button" onClick={() => void quote.refetch()} className="text-sm text-text-accent underline">

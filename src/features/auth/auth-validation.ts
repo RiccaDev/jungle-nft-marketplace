@@ -15,7 +15,7 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-function validateEmail(email: string) {
+export function validateEmail(email: string) {
   if (!email.trim()) return 'Informe seu e-mail.'
   if (!EMAIL_PATTERN.test(email.trim())) return 'Informe um e-mail válido.'
   return undefined
@@ -32,7 +32,7 @@ function validateNewPassword(password: string) {
   return undefined
 }
 
-function withoutEmptyEntries<Values>(errors: FieldErrors<Values>): FieldErrors<Values> {
+export function withoutEmptyEntries<Values>(errors: FieldErrors<Values>): FieldErrors<Values> {
   return Object.fromEntries(
     Object.entries(errors).filter(([, message]) => message !== undefined),
   ) as FieldErrors<Values>

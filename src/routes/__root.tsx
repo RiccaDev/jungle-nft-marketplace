@@ -12,6 +12,7 @@ import { useSessionLifecycle } from '@/features/auth/use-session-lifecycle'
 import { useCartRealtimeSync } from '@/features/cart/use-cart-realtime-sync'
 import { useCartSessionSync } from '@/features/cart/use-cart-session-sync'
 import { useNftRealtimeSync } from '@/features/nfts/use-nft-realtime-sync'
+import { useOrderRealtimeSync } from '@/features/orders/use-order-realtime-sync'
 import { useRealtimeConnection } from '@/lib/realtime/use-socket-connection'
 
 export const Route = createRootRouteWithContext<RouterContext>()({
@@ -23,6 +24,7 @@ function RootLayout() {
   useRealtimeConnection()
   useNftRealtimeSync()
   useCartRealtimeSync()
+  useOrderRealtimeSync()
   const { hasExpiredSessionNotice, dismissExpiredSessionNotice } = useSessionLifecycle()
   const { mergeNotice, dismissMergeNotice } = useCartSessionSync()
   const isMarketRoute = useIsMarketRoute()

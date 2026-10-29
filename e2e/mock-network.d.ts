@@ -2,5 +2,5 @@
 interface Window {
   __KURIO_NETWORK_CONDITIONS__?: (
     request: Request,
-  ) => { delayMs?: number; status?: number } | undefined
+  ) => { delayMs?: number; status?: number; delayAfterCommitMs?: number } | undefined
 }

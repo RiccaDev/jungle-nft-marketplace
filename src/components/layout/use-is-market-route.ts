@@ -5,7 +5,7 @@ const AUTH_PATHS = ['/entrar', '/cadastro']
 // Detail, cart and checkout screens belong to the "Mercado" flow in the design.
 export function useIsMarketRoute() {
   return useLocation({
-    select: (location) => location.pathname.startsWith('/nfts/') || location.pathname === '/carrinho',
+    select: (location) => location.pathname.startsWith('/nfts/') || location.pathname === '/carrinho' || location.pathname === '/pagamento',
   })
 }
 

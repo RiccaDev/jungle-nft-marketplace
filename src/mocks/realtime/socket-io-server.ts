@@ -19,6 +19,10 @@ const SOCKET_IO_CONNECT_PACKET_PREFIX = '40'
 
 const socketIoLink = ws.link(socketServerWebSocketUrl())
 const connectedClients = new Map<SocketIoConnection, ConnectedClient>()
+// Closes each open WebSocket, registered or not.
+const connectionClosers = new Set<() => void>()
+// While false, the simulated server drops every connection (see interruptRealtimeConnections).
+let isAcceptingConnections = true
 
 function isSocketIoConnectPacket(data: unknown): data is string {
   return typeof data === 'string' && data.startsWith(SOCKET_IO_CONNECT_PACKET_PREFIX)
@@ -37,8 +41,15 @@ function resolveHandshakeUserId(connectPacket: string) {
 }
 
 export const socketIoHandler = socketIoLink.addEventListener('connection', (connection) => {
+  if (!isAcceptingConnections) {
+    connection.client.close()
+    return
+  }
+
   const socketIo = toSocketIo(connection)
   let heartbeat: ReturnType<typeof setInterval> | undefined
+  const closeConnection = () => connection.client.close()
+  connectionClosers.add(closeConnection)
 
   // A socket closed while still connecting reaches this handler already closed and never
   // emits "close", so a client is only registered once it sends the Socket.IO CONNECT packet.
@@ -57,6 +68,7 @@ export const socketIoHandler = socketIoLink.addEventListener('connection', (conn
   connection.client.addEventListener('close', () => {
     clearInterval(heartbeat)
     connectedClients.delete(socketIo)
+    connectionClosers.delete(closeConnection)
   })
 })
 
@@ -78,4 +90,15 @@ export function emitToUser<EventName extends keyof ServerToClientEvents>(
   for (const client of connectedClients.values()) {
     if (client.userId === userId) client.socketIo.client.emit(eventName, ...payload)
   }
+}
+
+// Simulates a server-side outage: open connections are closed and reconnection attempts are
+// refused until resumed, so events emitted meanwhile are lost (the client must reconcile via REST).
+export function interruptRealtimeConnections() {
+  isAcceptingConnections = false
+  for (const closeConnection of [...connectionClosers]) closeConnection()
+}
+
+export function resumeRealtimeConnections() {
+  isAcceptingConnections = true
 }

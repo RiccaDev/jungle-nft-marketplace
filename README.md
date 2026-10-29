@@ -2,7 +2,7 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. **Carrinho e cotação (Etapa 6) em andamento:** funcionais em `/carrinho` e testados em `e2e/cart.spec.ts`, mas a documentação da etapa ainda está pendente (veja "Pendências da Etapa 6" no [ARCHITECTURE.md](ARCHITECTURE.md)). Checkout, perfil completo, carteiras e favoritos ainda não foram implementados.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho e cotação (Etapa 6) funcionais, com documentação pendente. **Checkout e pedidos (Etapa 7) funcionais** em `/pagamento` e `/pedidos/:orderId`, testados em `e2e/checkout.spec.ts`; a conferência com os frames do Figma e outras pendências estão em "Checkout e pedidos" no [ARCHITECTURE.md](ARCHITECTURE.md). Perfil completo, cadastro de carteiras e favoritos ainda não foram implementados.
 
 ## Credenciais fictícias
 
@@ -22,6 +22,9 @@ Contas existem apenas na API simulada. O código guarda somente hashes com salt;
 | `/entrar`       | Login (modal no desktop, página no mobile). Aceita `?redirect=` para voltar ao destino.   |
 | `/cadastro`     | Cadastro (modal no desktop, página no mobile). Aceita `?redirect=`.                       |
 | `/perfil`       | Privada: resumo da conta do usuário autenticado (perfil completo em etapa futura).        |
+| `/carrinho`     | Carrinho: quantidades, remoção, cupom e cotação da API.                                    |
+| `/pagamento`    | Privada: dados do colecionador, carteira e rede, revisão e envio idempotente do pedido.   |
+| `/pedidos/:orderId` | Privada: pedido pendente, confirmado (recibo com transação simulada) ou recusado.     |
 | `/diagnostico`  | Página técnica: status da API (`/api/health`) e demonstração de tempo real.               |
 
 ## Requisitos
@@ -80,6 +83,7 @@ O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em 
 | `e2e/realtime.spec.ts`   | `nft.updated` entregue pelo `socket.io-client` e reconciliação via REST após reconexão.         |
 | `e2e/catalog.spec.ts`    | Busca, filtros combinados, faixa de preço, ordenação, paginação, histórico, estado vazio, skeleton/erro/nova tentativa e respostas fora de ordem (desktop); busca e gaveta de filtros (mobile). |
 | `e2e/auth.spec.ts`       | Cadastro (validação, conflitos de usuário/e-mail), login inválido/válido, rota privada com retorno ao destino, refresh, logout, troca de usuário sem vazamento (e novo handshake do socket), sessão expirada durante a navegação e após refresh, 401 sem sessão (desktop); páginas e tab bar (mobile). |
+| `e2e/checkout.spec.ts`   | Compra completa até o recibo confirmado via `order.updated` (snapshot imune a alterações posteriores), novo preço via Socket.IO exigindo aceite, `409 QUOTE_CHANGED` durante o envio, recusa/aprovação/desconexão da carteira, pagamento recusado (carrinho e estoque preservados), timeout após a criação com recuperação do mesmo pedido, clique duplo e reenvios com a mesma chave, refresh e reconexão do socket com pedido pendente, isolamento Ana × Bruno (desktop); login exigido e compra completa (mobile). |
 | `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, ações indisponíveis, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
 
 ## Validando a autenticação no navegador
@@ -117,7 +121,7 @@ Com `npm run dev`:
    await fetch('/api/__mocks__/nfts/emerald-ape-042/events/2/replay', { method: 'POST' })
    ```
 
-   A sequência de alterações por NFT é cíclica: **+0,07 ETH e −1 unidade**, **+0,09 ETH e −2 unidades** (ambas na edição padrão), **−0,23 ETH e todas as edições esgotadas**. O estado dos mocks é reiniciado a cada recarga da página.
+   A sequência de alterações por NFT é cíclica: **+0,07 ETH e −1 unidade**, **+0,09 ETH e −2 unidades** (ambas na edição padrão), **−0,23 ETH e todas as edições esgotadas**. As alterações persistem após o refresh (veja "Estado e reset dos mocks").
 
 ## Validando a Home no navegador
 
@@ -155,3 +159,55 @@ A página `/diagnostico` exibe o NFT em destaque do catálogo (o mesmo de `GET /
 
 - **Simular alteração no servidor:** chama o endpoint de controle do mock. O mock altera o registro do catálogo e emite `nft.updated` pelo Socket.IO. A resposta REST não traz dados (`202`), então a interface só muda ao receber o evento.
 - **Desconectar/Reconectar socket:** com o socket desconectado, a alteração não chega à interface. Ao reconectar, os dados de NFTs ativos são reconsultados via REST.
+
+## Estado e reset dos mocks
+
+Carrinhos, pedidos, conexões de carteira, cenário, sessões e as alterações do catálogo (preço e estoque) ficam no `localStorage` com o prefixo `kurio-mock:`, para que carrinho, estoque e pedidos continuem consistentes após o refresh. Para voltar ao cenário inicial:
+
+```js
+await fetch('/api/__mocks__/reset', { method: 'POST' }); location.reload()
+```
+
+## Validando o checkout no navegador
+
+Com `npm run dev`, entre como Ana (`ana@kurio.dev` / `kurio-ana-2026`):
+
+1. **Compra normal:** adicione `/nfts/emerald-ape-042` ao carrinho e clique em **Conectar e finalizar**. Em `/pagamento`, confira os dados, conecte a carteira, clique em **Revisar pedido** e em **Confirmar compra**. O pedido abre como **pendente** e, cerca de 2,5 s depois, muda para **confirmado** pelo evento `order.updated` (frame `42["order.updated",…]` no console). O carrinho fica sem o item e o estoque da edição cai uma unidade.
+2. **Alteração de preço:** na revisão, rode no console `await fetch('/api/__mocks__/nfts/emerald-ape-042/market-change', { method: 'POST' })`. Aparece a lista de alterações, o botão de confirmar fica bloqueado e só libera após **Aceitar novos valores**.
+3. **Cenários da carteira e do pagamento** (persistem após o refresh):
+
+   ```js
+   const scenario = (changes) =>
+     fetch('/api/__mocks__/scenario', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes) })
+
+   await scenario({ walletConnection: 'reject' })   // a carteira recusa a conexão
+   await scenario({ walletConnection: 'approve' })  // volta a aprovar
+   await scenario({ payment: 'reject' })            // pagamento recusado: estoque devolvido, carrinho preservado
+   await scenario({ payment: 'manual' })            // o pedido fica pendente até ser liquidado manualmente
+   await scenario({ payment: 'confirm', settlementDelayMs: 2500 }) // padrão
+   ```
+
+4. **Pedido pendente, refresh e reconexão:** com `payment: 'manual'`, confirme a compra e recarregue `/pedidos/:orderId` (continua pendente, lido via REST). Para simular queda do servidor de tempo real e liquidar enquanto ninguém está conectado:
+
+   ```js
+   const orderId = location.pathname.split('/').pop()
+   await fetch('/api/__mocks__/realtime/interrupt', { method: 'POST' })
+   await fetch(`/api/__mocks__/orders/${orderId}/settle`, {
+     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome: 'confirmed' }),
+   })
+   await fetch('/api/__mocks__/realtime/resume', { method: 'POST' }) // ao reconectar, o pedido é relido via REST
+   ```
+
+5. **Timeout com recuperação:** antes de confirmar, rode o trecho abaixo. O pedido é criado, mas a resposta chega depois do timeout (10 s); clique em **Tentar novamente**: a mesma chave de idempotência é reenviada e o mesmo pedido é aberto (`GET /api/orders` mostra um único pedido).
+
+   ```js
+   let attempts = 0
+   window.__KURIO_NETWORK_CONDITIONS__ = (request) =>
+     request.method === 'POST' && new URL(request.url).pathname === '/api/orders' && ++attempts === 1
+       ? { delayAfterCommitMs: 20000 }
+       : undefined
+   ```
+
+6. **Isolamento:** com um pedido de Ana aberto, saia e entre como Bruno (`bruno@kurio.dev` / `kurio-bruno-2026`). A URL do pedido de Ana mostra "Pedido não encontrado", e o pagamento de Bruno lista apenas a carteira dele.
+
+Os contratos, a política de idempotência e os estados do pedido estão documentados em "Checkout e pedidos" no [ARCHITECTURE.md](ARCHITECTURE.md).

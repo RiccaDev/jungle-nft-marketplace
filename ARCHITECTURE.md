@@ -15,6 +15,9 @@ src/
     auth/             contratos, validação compartilhada, sessão, telas de login/cadastro e ciclo de vida
     account/          resumo da conta (primeira página privada)
     realtime-demo/    painel técnico de `/diagnostico`
+    checkout/         tela de pagamento: dados do comprador, carteira, cotação aceita e envio idempotente
+    orders/           contratos e API de pedidos, comparação de cotações, order.updated e página do pedido
+    wallets/          contratos e API das carteiras e da conexão simulada
   components/layout/  cabeçalho, rodapé e tab bar mobile
   components/ui/      componentes shadcn/ui adaptados ao tema
   hooks/              hooks genéricos (debounce, media query)
@@ -27,6 +30,7 @@ src/
     catalog/          consulta do catálogo (busca, filtros, facetas, ordenação, paginação)
     fixtures/         dados determinísticos
     handlers/         handlers REST do MSW, por recurso, e endpoints de controle dos mocks
+    orders/           criação, reserva de estoque e liquidação de pedidos
     network/          simulação de latência e falhas
     realtime/         servidor Socket.IO simulado (MSW `ws` + @mswjs/socket.io-binding) e publicação de eventos
     state/            estado mutável dos mocks (fonte única para REST e eventos)
@@ -150,7 +154,7 @@ Rotas privadas ficam sob o layout sem caminho `routes/_authenticated.tsx`. O `be
 
 ### Socket.IO e sessão
 
-O `socket.io-client` envia `{ token }` no pacote CONNECT (`auth` como função, lida a cada handshake). Toda troca de sessão chama `reconnectWithCurrentSession()`, e o novo handshake descarta as assinaturas da identidade anterior no servidor. O servidor simulado associa cada conexão ao `userId` do token e expõe `emitToUser(userId, …)` para eventos privados futuros (`order.updated`); eventos públicos (`nft.updated`) continuam indo para todos.
+O `socket.io-client` envia `{ token }` no pacote CONNECT (`auth` como função, lida a cada handshake). Toda troca de sessão chama `reconnectWithCurrentSession()`, e o novo handshake descarta as assinaturas da identidade anterior no servidor. O servidor simulado associa cada conexão ao `userId` do token e expõe `emitToUser(userId, …)` para eventos privados (`order.updated`); eventos públicos (`nft.updated`) continuam indo para todos.
 
 ### Pontos de integração preparados
 
@@ -278,6 +282,142 @@ type ApiErrorBody = {
 - **Reconciliação:** eventos emitidos durante uma desconexão são perdidos. Por isso, a cada reconexão (exceto a primeira conexão), todas as queries `['nfts', …]` são invalidadas e as ativas são reconsultadas via REST.
 - **Ciclo de vida:** a conexão é aberta por `useRealtimeConnection` na raiz e dura enquanto a aplicação estiver aberta; `useSocketStatus` apenas observa e controla o socket (usado em `/diagnostico`). Listeners são registrados em `useEffect` e removidos na limpeza.
 
+## Checkout e pedidos (Etapa 7)
+
+Fluxo: `/carrinho` → `/pagamento` (privada) → `/pedidos/$orderId` (privada). Nenhum resultado de compra é decidido no React: a interface só exibe o que a API simulada responde (REST) ou publica (`order.updated`).
+
+### Etapas da tela de pagamento
+
+1. **Dados do colecionador:** nome completo e e-mail, pré-preenchidos com a sessão. `validateBuyerDetails` (`features/checkout/checkout-validation.ts`) é usado pelo formulário e pelo handler de `POST /api/orders`.
+2. **Carteira e rede:** carteiras cadastradas do usuário (`GET /api/me/wallets`) e rede de pagamento (Ethereum ou Polygon, conforme a carteira). Conectar chama `POST /api/me/wallet-connection`, cuja resposta (aprovação ou recusa) vem do cenário ativo do mock; desconectar chama `DELETE`. A conexão fica no servidor simulado e sobrevive ao refresh.
+3. **Revisão:** "Revisar pedido" valida os dados e exige carteira conectada; a revisão mostra comprador, carteira, itens e valores. "Confirmar compra" envia o pedido.
+
+### Cotação aceita × cotação viva
+
+`useAcceptedQuote` guarda os valores que o comprador revisou (a primeira cotação válida) separados da cotação viva do carrinho, que continua seguindo a API e o `nft.updated`. `diffExpectedQuotes` (`features/orders/expected-quote.ts`, usado também pela API) compara linhas, quantidades, preços unitários, cupom, subtotal, desconto, taxa e total em wei (`BigInt`). Qualquer diferença:
+
+- mostra a lista de alterações (anterior → novo) em `role="alert"`;
+- mantém o resumo com os valores aceitos e desabilita "Confirmar compra";
+- só é liberada por "Aceitar novos valores", que passa a ser a nova cotação aceita.
+
+A API faz a mesma verificação no envio: recalcula a cotação a partir do carrinho e do catálogo atuais e responde `409 QUOTE_CHANGED` (ou `CART_NOT_PURCHASABLE`, se houver item esgotado ou cupom expirado) com a `currentQuote`. O cliente então reconsulta o carrinho e exibe a diferença. Assim, uma alteração recebida pelo socket bloqueia antes do envio, e uma alteração que chega durante o envio (ou com o socket desconectado) é barrada pelo servidor.
+
+### Idempotência
+
+| Camada | Garantia |
+| ------ | -------- |
+| Botão | Um `useRef` bloqueia o segundo clique antes do re-render; o botão fica desabilitado enquanto a mutation está pendente. |
+| Chave por tentativa | `resolvePurchaseAttemptKey` gera um UUID por **conteúdo** do pedido (comprador, conexão da carteira, cotação aceita) e o guarda por usuário (`kurio.purchase-attempt:<userId>`, em memória e no `localStorage`). Reenviar o mesmo conteúdo — "Tentar novamente" após timeout, falha de rede, 5xx ou refresh — reutiliza a chave. A chave é descartada quando a API dá uma resposta definitiva (2xx ou 4xx). |
+| API | `(userId, Idempotency-Key)` mapeia para um único pedido. A mesma chave com o mesmo conteúdo (impressão digital canônica do corpo) devolve o pedido existente (`200`; `201` na criação); com outro conteúdo, `409 IDEMPOTENCY_KEY_REUSED`. Entre a verificação da chave e a gravação não há `await`, então requisições concorrentes com a mesma chave nunca criam dois pedidos. |
+| Pedido pendente | Enquanto houver pedido `pending`, uma nova tentativa (outra chave) recebe `409 ORDER_PENDING` com o `orderId`; a tela de pagamento avisa e aponta para o pedido. |
+
+Timeout após a criação: a resposta chega depois do timeout do Axios (10 s); a interface informa que o resultado é incerto e oferece "Tentar novamente", que reenvia a mesma chave e recebe o mesmo pedido. O estoque é reservado uma única vez.
+
+### Estados do pedido e liquidação
+
+```
+POST /api/orders ──► pending ──(liquidação)──► confirmed   (terminal)
+                                         └──► rejected    (terminal)
+```
+
+- **Criação (`pending`):** grava o snapshot (linhas com nome, imagem, edição, quantidade e preço unitário; subtotal, desconto/cupom, taxa e total; comprador; carteira e rede) e **reserva o estoque** das edições compradas (cada alteração emite `nft.updated`).
+- **Confirmação:** gera a referência simulada da transação e remove do carrinho **somente as quantidades compradas** (itens adicionados durante o pendente permanecem).
+- **Recusa:** devolve o estoque reservado (com `nft.updated`); o carrinho não é alterado.
+- A liquidação acontece após `settlementDelayMs` (timer) ou sob demanda pelo endpoint de controle. Como timers morrem com a página, toda leitura de pedidos liquida os vencidos (`settleDueOrders`) e, ao carregar, os timers pendentes são reagendados. Estados terminais nunca mudam (liquidar duas vezes não tem efeito).
+- O recibo (`/pedidos/$orderId`) sempre exibe o snapshot do pedido; alterações posteriores no catálogo não o afetam. A confirmação só aparece com `status === 'confirmed'` vindo da API.
+
+### `order.updated`
+
+| Campo | Descrição |
+| ----- | --------- |
+| `eventId` | `order.updated:<orderId>:<version>` |
+| `orderId`, `version` | recurso afetado e versão monotônica (1 na criação, 2 no estado terminal) |
+| `status`, `updatedAt`, `transaction`, `failure` | novo estado do pedido |
+| `occurredAt` | ISO |
+
+- Privado: o servidor emite com `emitToUser(order.userId, …)`, apenas para conexões cujo handshake autenticou o dono do pedido.
+- `useOrderRealtimeSync` (raiz) assina por usuário; aplica o evento à chave `['private', userId, 'orders', 'detail', id]` só se a versão for maior (duplicatas e eventos antigos são ignorados), invalida as listas e, na confirmação, o carrinho do usuário.
+- **Reconexão:** a cada reconexão, as queries `['private', userId, 'orders']` são invalidadas e reconsultadas por REST. O pedido também é lido por REST ao abrir/recarregar a página (`staleTime: 0`). Com o socket desconectado, a página do pedido avisa que o status será consultado ao reconectar.
+
+### Isolamento entre usuários
+
+Pedidos, carteiras e conexão ficam sob `['private', userId, …]` (descartados a cada troca de sessão). A API só encontra pedidos do próprio usuário (pedido de outra conta responde `404`, sem revelar existência); chaves de idempotência são escopadas por usuário; `order.updated` só vai para o dono. As rotas `/pagamento` e `/pedidos/$orderId` são remontadas por `key={userId}`.
+
+### Contratos REST (checkout)
+
+| Método | Caminho | Resposta |
+| ------ | ------- | -------- |
+| GET    | `/api/me/wallets` | 200 `{ wallets: Wallet[] }` · 401 |
+| GET    | `/api/me/wallet-connection` | 200 `{ connection: WalletConnection \| null }` · 401 |
+| POST   | `/api/me/wallet-connection` | 201 `{ connection }` · 403 `WALLET_CONNECTION_REJECTED` · 404 `WALLET_NOT_FOUND` · 422 `NETWORK_NOT_SUPPORTED` · 401 |
+| DELETE | `/api/me/wallet-connection` | 204 · 401 |
+| POST   | `/api/orders` (header `Idempotency-Key`) | 201/200 `Order` · 400 `IDEMPOTENCY_KEY_REQUIRED` · 409 `IDEMPOTENCY_KEY_REUSED` / `WALLET_NOT_CONNECTED` / `ORDER_PENDING` (+`orderId`) / `CART_EMPTY` / `CART_NOT_PURCHASABLE` (+`currentQuote`) / `QUOTE_CHANGED` (+`currentQuote`) · 422 `VALIDATION_FAILED` (+`fieldErrors`) · 401 |
+| GET    | `/api/orders?status=` | 200 `{ orders: Order[] }` (do usuário, mais recentes primeiro) · 401 |
+| GET    | `/api/orders/:orderId` | 200 `Order` · 404 `ORDER_NOT_FOUND` · 401 |
+| GET/PUT | `/api/__mocks__/scenario` | cenário ativo (controle dos mocks) |
+| POST   | `/api/__mocks__/orders/:orderId/settle` `{ outcome }` | 202 · 404 · 409 (já terminal) · 422 |
+| POST   | `/api/__mocks__/realtime/interrupt` e `/resume` | 202: derruba as conexões Socket.IO e recusa novas até retomar |
+| POST   | `/api/__mocks__/reset` | 202: apaga todo o estado persistido dos mocks (recarregue a página em seguida) |
+
+Tipos em `src/features/orders/order.contracts.ts` e `src/features/wallets/wallet.contracts.ts`:
+
+```ts
+type ExpectedQuote = {
+  couponCode: string | null
+  lines: { itemId: string; quantity: number; unitPriceEth: string }[]
+  subtotalEth: string; discountEth: string; networkFeeEth: string; totalEth: string
+}
+type CreateOrderRequest = {
+  buyer: { fullName: string; email: string }
+  walletConnectionId: string
+  expectedQuote: ExpectedQuote
+}
+type Order = {
+  id: string; number: string /* KR-000001 */; status: 'pending' | 'confirmed' | 'rejected'; version: number
+  createdAt: string; updatedAt: string
+  lines: { itemId; nftId; editionTier; name; image; tokenId; network; quantity; unitPriceEth; lineTotalEth }[]
+  pricing: { subtotalEth; discountEth; networkFeeEth; totalEth; coupon: { code; description } | null }
+  buyer: { fullName; email }
+  payment: { walletId; walletLabel; address; network: 'ethereum' | 'polygon' }
+  transaction: { hash; explorerUrl } | null // só quando confirmado
+  failure: { code; message } | null         // só quando recusado
+}
+```
+
+### Cenários do checkout (mock)
+
+`src/mocks/state/scenario.state.ts`, persistido em `kurio-mock:scenario:v1`:
+
+| Campo | Valores | Padrão |
+| ----- | ------- | ------ |
+| `walletConnection` | `approve`, `reject` | `approve` |
+| `payment` | `confirm`, `reject`, `manual` (fica pendente até `settle`) | `confirm` |
+| `settlementDelayMs` | 0 a 60000 | 2500 |
+
+`NetworkCondition` ganhou `delayAfterCommitMs`: o handler conclui a operação e só então atrasa a resposta (simula timeout após a criação do pedido). O resolvedor é chamado uma vez por requisição.
+
+### Persistência do estado simulado
+
+Carrinhos, pedidos, conexões de carteira, cenário e agora também o **catálogo** (preço, estoque por edição e versão de cada NFT alterado) persistem no `localStorage` (`kurio-mock:*`, via `mocks/state/mock-storage.ts`). Isso mantém carrinho, estoque e pedidos consistentes após o refresh (um pedido não "devolve" estoque reservado ao recarregar). `POST /api/__mocks__/reset` seguido de recarga restaura o cenário inicial. O histórico de eventos `nft.updated` usado pelo replay continua em memória.
+
+### Desvios do Figma (pagamento e confirmação)
+
+O Figma MCP não estava disponível nesta etapa e não havia metadados salvos dos frames de pagamento (desktop 11:2862, mobile 16:748) e confirmação (11:4385). As telas foram montadas com os tokens, a tipografia e os componentes já usados no carrinho (títulos de seção com sublinhado primário, resumo de 332 px à direita no desktop, resumo em folha arredondada no mobile, botões primários de 40/60 px). A conferência visual com os frames está pendente. Decisões próprias:
+
+- etapas numeradas (dados, carteira e rede, revisão) na mesma página, com a revisão substituindo os formulários;
+- carteiras como cartões de opção (`radio`) e rede como `Select` do shadcn;
+- aviso de alteração de valores acima do conteúdo, com a lista anterior → novo;
+- página do pedido com faixa de status (pendente/confirmado/recusado), itens à esquerda e resumo à direita; o link do explorador é identificado como simulado.
+
+### Pendências desta etapa
+
+- Conferir as telas com os frames do Figma quando o MCP estiver disponível e registrar os desvios reais.
+- Cadastro e edição de carteiras (as fixtures cobrem Ana e Bruno; contas novas recebem uma carteira principal de demonstração derivada do id).
+- Expiração da sessão durante o checkout: o guard e o ciclo de sessão existentes levam ao login e retornam a `/pagamento`, mas os dados digitados no formulário não são preservados.
+- Lista de pedidos no perfil (a API `GET /api/orders` já existe).
+- Durante um pedido pendente, o carrinho pode exibir a linha como esgotada ou com estoque insuficiente (o estoque já está reservado); não há aviso específico no carrinho.
+- Regressão visual (baselines) do pagamento ainda não foi criada.
+
 ## Política de cache e retries
 
 | Configuração           | Valor                                     | Motivo                                                           |
@@ -297,7 +437,7 @@ Chaves de query: `['nfts', 'list', NftListRequest]` (com padrões aplicados, par
 - A URL do worker considera `BASE_URL`, o que permite deploy em subcaminho.
 - As URLs da API (`src/lib/http/config.ts`) e do servidor Socket.IO (`src/lib/realtime/config.ts`) são compartilhadas entre o código da aplicação e os mocks, para nunca divergirem.
 - **Ordem de inicialização:** `src/main.tsx` importa a aplicação dinamicamente **depois** de `worker.start()`. O `engine.io-client` guarda `globalThis.WebSocket` quando o módulo é avaliado; se a aplicação fosse importada estaticamente, o cliente guardaria o WebSocket nativo antes de o MSW substituí-lo, e a conexão iria para a rede real (o `vite preview` responde 200 com HTML e o handshake falha).
-- **Fonte única de dados:** o estado vive em memória em `src/mocks/state/nft-catalog.state.ts` e é reiniciado a cada recarga da página. `GET /api/nfts`, `/featured`, `/:id`, `/:id/related` e os eventos `nft.updated` leem e publicam a partir dos mesmos registros; uma alteração de mercado substitui o registro (com `version + 1`) e o evento é montado a partir dele.
+- **Fonte única de dados:** o estado vive em `src/mocks/state/nft-catalog.state.ts`; desde a Etapa 7 os registros alterados persistem no `localStorage` (veja "Persistência do estado simulado"). `GET /api/nfts`, `/featured`, `/:id`, `/:id/related` e os eventos `nft.updated` leem e publicam a partir dos mesmos registros; uma alteração de mercado substitui o registro (com `version + 1`) e o evento é montado a partir dele.
 
 ### Usuários e sessões
 
@@ -447,10 +587,8 @@ Pendente:
 
 ## Limitações conhecidas
 
-- O carrinho ainda não existe, então `nft.updated` atualiza catálogo, detalhe, relacionados e destaque, mas ainda não um resumo de carrinho.
-- O estado dos mocks ainda não persiste entre recargas, e ainda não há seleção nem reset de cenários. As condições de rede cobrem apenas os endpoints de NFTs.
-- A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
-- `order.updated` ainda não existe; o canal privado por usuário (`emitToUser`) e o novo handshake a cada troca de sessão já estão prontos para ele.
-- Favoritos, carrinho, checkout, carteiras e edição de perfil continuam indisponíveis; `/perfil` mostra apenas o resumo da conta.
 - A sessão não é renovada automaticamente: ao fim dos 30 minutos o usuário precisa entrar novamente.
-- O estado do catálogo continua em memória (reinicia no refresh), enquanto usuários e sessões persistem; o reset completo de cenários ainda não existe.
+- O reset dos mocks (`POST /api/__mocks__/reset`) apaga o estado persistido; o estado em memória só é reconstruído na próxima recarga da página.
+- Favoritos, perfil completo e cadastro de carteiras continuam indisponíveis; `/perfil` mostra apenas o resumo da conta.
+- A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
+- As condições de rede (`__KURIO_NETWORK_CONDITIONS__`) cobrem NFTs, carrinho, carteiras e pedidos, mas não a autenticação.
