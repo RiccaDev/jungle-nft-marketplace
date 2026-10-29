@@ -3,12 +3,16 @@ import {
   NFT_COLLECTION_IDS,
   NFT_NETWORK_IDS,
   type NftCollectionId,
+  type NftDetail,
+  type NftEdition,
+  type NftGalleryView,
   type NftImage,
   type NftNetworkId,
-  type NftSummary,
 } from '@/features/nfts/nft.contracts'
+import { totalAvailableQuantity } from '@/features/nfts/nft-edition-selection'
+import { NFT_NETWORK_LABELS } from '@/features/nfts/nft-labels'
 
-export type NftCatalogRecord = NftSummary & {
+export type NftCatalogRecord = NftDetail & {
   salesLast7Days: number
 }
 
@@ -22,23 +26,48 @@ const ARTWORKS = {
   sunglassesVarsity: {
     slug: 'ape-sunglasses-varsity',
     alt: 'Macaco ilustrado com óculos redondos e jaqueta universitária verde',
+    seriesName: 'Kurio Apes',
+    attributes: ['Óculos', 'Esmeralda'],
   },
   bucketHatHoodie: {
     slug: 'ape-bucket-hat-hoodie',
     alt: 'Gorila ilustrado com chapéu bucket verde e moletom lilás',
+    seriesName: 'Nomad Club',
+    attributes: ['Chapéu bucket', 'Moletom'],
   },
   turtleneckBlazer: {
     slug: 'ape-turtleneck-blazer',
     alt: 'Macaco ilustrado com gola alta verde e blazer bege',
+    seriesName: 'Baron Society',
+    attributes: ['Gola alta', 'Blazer'],
   },
   headphonesJacket: {
     slug: 'ape-headphones-jacket',
     alt: 'Orangotango ilustrado com fones de ouvido e jaqueta clara',
+    seriesName: 'Golden Frequencies',
+    attributes: ['Fones de ouvido', 'Jaqueta'],
   },
 } as const
 
 type Artwork = (typeof ARTWORKS)[keyof typeof ARTWORKS]
 const ARTWORK_ROTATION: Artwork[] = Object.values(ARTWORKS)
+
+const CREATOR_NAMES = ['Nova Sato', 'Iris Kellan', 'Theo Marlow', 'Ayla Corbin', 'Rafa Duarte', 'Mina Okafor']
+const ROYALTY_PERCENTAGES = [5, 7, 10]
+
+const GALLERY_VIEWS: NftGalleryView[] = [
+  { id: 'full', label: 'Obra completa', zoom: 1, focusX: 50, focusY: 50 },
+  { id: 'portrait', label: 'Detalhe do rosto', zoom: 1.8, focusX: 50, focusY: 38 },
+  { id: 'outfit', label: 'Detalhe do figurino', zoom: 2, focusX: 50, focusY: 85 },
+  { id: 'texture', label: 'Detalhe da textura', zoom: 2.6, focusX: 30, focusY: 55 },
+]
+
+const MAX_PER_ORDER_BY_TIER = {
+  'one-of-one': 1,
+  'one-of-ten': 2,
+  'one-of-fifty': 5,
+  open: 10,
+} as const
 
 function toNftImage(artwork: Artwork): NftImage {
   const basePath = `${import.meta.env.BASE_URL}images/nfts/${artwork.slug}`
@@ -57,6 +86,27 @@ function hoursBeforeReference(hours: number) {
   return new Date(CATALOG_REFERENCE_DATE.getTime() - hours * HOUR_MS).toISOString()
 }
 
+function toHexWord(value: number) {
+  return (value & 0xffff).toString(16).toUpperCase().padStart(4, '0')
+}
+
+// Splits the total stock across editions; the 1/50 edition keeps the largest share.
+function splitAvailability(totalAvailable: number, index: number): NftEdition[] {
+  const oneOfOne = totalAvailable > 0 && index % 2 === 0 ? 1 : 0
+  let remaining = totalAvailable - oneOfOne
+  const oneOfTen = Math.min(Math.floor(remaining / 4), 10)
+  remaining -= oneOfTen
+  const oneOfFifty = Math.min(Math.ceil(remaining / 2), 50)
+  const open = remaining - oneOfFifty
+
+  return [
+    { tier: 'one-of-one', availableQuantity: oneOfOne, maxPerOrder: MAX_PER_ORDER_BY_TIER['one-of-one'] },
+    { tier: 'one-of-ten', availableQuantity: oneOfTen, maxPerOrder: MAX_PER_ORDER_BY_TIER['one-of-ten'] },
+    { tier: 'one-of-fifty', availableQuantity: oneOfFifty, maxPerOrder: MAX_PER_ORDER_BY_TIER['one-of-fifty'] },
+    { tier: 'open', availableQuantity: open, maxPerOrder: MAX_PER_ORDER_BY_TIER.open },
+  ]
+}
+
 type NftSeed = {
   name: string
   collectionId: NftCollectionId
@@ -70,7 +120,19 @@ type NftSeed = {
   salesLast7Days: number
 }
 
-function toRecord(seed: NftSeed): NftCatalogRecord {
+function pickCyclic<Item>(items: readonly Item[], index: number): Item {
+  const item = items[index % items.length]
+  if (item === undefined) throw new Error('Cannot pick from an empty list')
+  return item
+}
+
+function toRecord(seed: NftSeed, index: number): NftCatalogRecord {
+  const editions = splitAvailability(seed.availableQuantity, index)
+  const creatorName = pickCyclic(CREATOR_NAMES, index)
+  const royaltyPercent = pickCyclic(ROYALTY_PERCENTAGES, index)
+  const networkLabel = NFT_NETWORK_LABELS[seed.network]
+  const { seriesName } = seed.artwork
+
   return {
     id: toNftId(seed.name),
     name: seed.name,
@@ -78,11 +140,30 @@ function toRecord(seed: NftSeed): NftCatalogRecord {
     network: seed.network,
     priceEth: seed.priceEth,
     previousPriceEth: seed.previousPriceEth ?? null,
-    availableQuantity: seed.availableQuantity,
+    availableQuantity: totalAvailableQuantity(editions),
     rarity: seed.rarity ?? null,
     image: toNftImage(seed.artwork),
     listedAt: hoursBeforeReference(seed.listedHoursAgo),
     version: 1,
+    tokenId: `#${seed.name.split('#')[1]?.padStart(4, '0') ?? '0000'}`,
+    seriesName,
+    creatorName,
+    royaltyPercent,
+    attributes: seed.rarity ? [...seed.artwork.attributes, 'Raro'] : [...seed.artwork.attributes],
+    summary: `Um colecionável digital finalizado à mão da coleção ${seriesName}, verificado na ${networkLabel}, com arte desbloqueável e acesso para colecionadores.`,
+    description: [
+      `${seed.name} é uma obra digital finalizada à mão da coleção ${seriesName}. Cada atributo fica armazenado nos metadados do token e verificado na ${networkLabel}. A obra explora identidade, movimento e luz em um mundo digital sem fronteiras.`,
+      `A propriedade inclui a arte em alta resolução, lançamentos exclusivos para colecionadores e um registro permanente de procedência registrada na rede. ${creatorName} recebe ${royaltyPercent}% de direitos autorais nas vendas secundárias, apoiando novos trabalhos e lançamentos da comunidade.`,
+    ],
+    networkDescription: `Cunhado na ${networkLabel} com procedência imutável e metadados armazenados no IPFS.`,
+    contractAddress: `0x${toHexWord(0x7a42 + index * 0x1f3)}...${toHexWord(0x19e8 + index * 0x2b7)}`,
+    contractStandard: 'ERC-721',
+    rating: {
+      average: (40 + ((index * 7 + 8) % 11)) / 10,
+      reviewCount: 19 + ((index * 11) % 60),
+    },
+    editions,
+    gallery: GALLERY_VIEWS,
     salesLast7Days: seed.salesLast7Days,
   }
 }
@@ -123,12 +204,6 @@ const GENERATED_NAME_STEMS = [
 const GENERATED_EDITIONS_PER_STEM = 3
 const LOWEST_PRICE_HUNDREDTHS = 2
 const HIGHEST_PRICE_HUNDREDTHS = 1230
-
-function pickCyclic<Item>(items: readonly Item[], index: number): Item {
-  const item = items[index % items.length]
-  if (item === undefined) throw new Error('Cannot pick from an empty list')
-  return item
-}
 
 function generatedPriceHundredths(index: number, total: number) {
   if (index === total - 1) return HIGHEST_PRICE_HUNDREDTHS

@@ -2,14 +2,14 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, prova técnica de tempo real (Socket.IO + MSW) e Home com catálogo funcional concluídas. Detalhe do NFT, carrinho, checkout e conta ainda não foram implementados.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo e detalhe do NFT concluídos. Carrinho, checkout e conta ainda não foram implementados: os botões de compra e favoritos aparecem indisponíveis.
 
 ## Rotas
 
 | Rota            | Conteúdo                                                                                  |
 | --------------- | ----------------------------------------------------------------------------------------- |
 | `/`             | Home: hero, catálogo com busca, filtros, ordenação e paginação, destaques, blog e rodapé. |
-| `/nfts/:nftId`  | Provisória: indica que o detalhe do NFT ainda está em construção.                         |
+| `/nfts/:nftId`  | Detalhe: galeria, informações, edição (`?edition=`), quantidade, descrição e relacionados. |
 | `/diagnostico`  | Página técnica: status da API (`/api/health`) e demonstração de tempo real.               |
 
 ## Requisitos
@@ -67,6 +67,27 @@ O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em 
 | `e2e/smoke.spec.ts`      | `GET /api/health` via MSW e página de rota inexistente.                                        |
 | `e2e/realtime.spec.ts`   | `nft.updated` entregue pelo `socket.io-client` e reconciliação via REST após reconexão.         |
 | `e2e/catalog.spec.ts`    | Busca, filtros combinados, faixa de preço, ordenação, paginação, histórico, estado vazio, skeleton/erro/nova tentativa e respostas fora de ordem (desktop); busca e gaveta de filtros (mobile). |
+| `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, ações indisponíveis, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
+
+## Validando o detalhe do NFT no navegador
+
+Com `npm run dev`:
+
+1. Na Home, clique em um card ou acesse direto `http://localhost:5173/nfts/emerald-ape-042`.
+2. **Edições e quantidade:** em `/nfts/golden-signal-160`, a edição 1/50 tem 6 unidades, mas o máximo por pedido é 5; a 1/10 permite 2. A edição escolhida vai para a URL (`?edition=one-of-ten`).
+3. **Esgotados:** `/nfts/sage-nomad-009?edition=one-of-one` (edição esgotada) e `/nfts/ivory-baron-088` (todas as edições esgotadas).
+4. **Inexistente:** `/nfts/nft-inexistente` responde 404 e mostra "NFT não encontrado".
+5. **Tempo real:** com o detalhe aberto, rode no console do navegador:
+
+   ```js
+   // Aplica a próxima alteração determinística (preço e estoque) e emite nft.updated
+   await fetch('/api/__mocks__/nfts/emerald-ape-042/market-change', { method: 'POST' })
+
+   // Reemite um evento já publicado (duplicado/antigo): a interface deve ignorá-lo
+   await fetch('/api/__mocks__/nfts/emerald-ape-042/events/2/replay', { method: 'POST' })
+   ```
+
+   A sequência de alterações por NFT é cíclica: **+0,07 ETH e −1 unidade**, **+0,09 ETH e −2 unidades** (ambas na edição padrão), **−0,23 ETH e todas as edições esgotadas**. O estado dos mocks é reiniciado a cada recarga da página.
 
 ## Validando a Home no navegador
 
@@ -100,9 +121,7 @@ delete window.__KURIO_NETWORK_CONDITIONS__
 
 ## Demonstração de tempo real (`/diagnostico`)
 
-A página `/diagnostico` exibe um NFT fictício, servido pelo MSW, e dois controles:
+A página `/diagnostico` exibe o NFT em destaque do catálogo (o mesmo de `GET /api/nfts/featured`) e dois controles:
 
-- **Simular alteração no servidor:** chama o endpoint de controle do mock. O mock altera o estado do NFT e emite `nft.updated` pelo Socket.IO. A resposta REST não traz dados (`202`), então a interface só muda ao receber o evento.
-- **Desconectar/Reconectar socket:** com o socket desconectado, a alteração não chega à interface. Ao reconectar, o NFT é reconsultado via REST.
-
-As alterações seguem uma sequência determinística de preço e disponibilidade (`0.82/9`, `0.91/7`, `0.68/0`, em ciclo). O estado do mock é reiniciado a cada recarga da página.
+- **Simular alteração no servidor:** chama o endpoint de controle do mock. O mock altera o registro do catálogo e emite `nft.updated` pelo Socket.IO. A resposta REST não traz dados (`202`), então a interface só muda ao receber o evento.
+- **Desconectar/Reconectar socket:** com o socket desconectado, a alteração não chega à interface. Ao reconectar, os dados de NFTs ativos são reconsultados via REST.

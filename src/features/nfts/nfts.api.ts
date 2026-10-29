@@ -1,12 +1,22 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 import { apiClient } from '@/lib/http/api-client'
-import type { NftListFilters, NftListRequest, NftListResponse, NftSummary } from './nft.contracts'
+import type {
+  NftDetail,
+  NftListFilters,
+  NftListRequest,
+  NftListResponse,
+  NftSummary,
+} from './nft.contracts'
 import { serializeNftListRequest, toNftListRequest } from './nft-list-filters'
 
 export const nftQueryKeys = {
   all: ['nfts'] as const,
-  list: (request: NftListRequest) => [...nftQueryKeys.all, 'list', request] as const,
+  lists: () => [...nftQueryKeys.all, 'list'] as const,
+  list: (request: NftListRequest) => [...nftQueryKeys.lists(), request] as const,
   featured: () => [...nftQueryKeys.all, 'featured'] as const,
+  detail: (nftId: string) => [...nftQueryKeys.all, 'detail', nftId] as const,
+  relatedLists: () => [...nftQueryKeys.all, 'related'] as const,
+  related: (nftId: string) => [...nftQueryKeys.relatedLists(), nftId] as const,
 }
 
 export async function getNftList(request: NftListRequest, signal?: AbortSignal) {
@@ -19,6 +29,19 @@ export async function getNftList(request: NftListRequest, signal?: AbortSignal) 
 
 export async function getFeaturedNft(signal?: AbortSignal) {
   const { data } = await apiClient.get<NftSummary>('/nfts/featured', { signal })
+  return data
+}
+
+export async function getNftDetail(nftId: string, signal?: AbortSignal) {
+  const { data } = await apiClient.get<NftDetail>(`/nfts/${encodeURIComponent(nftId)}`, { signal })
+  return data
+}
+
+export async function getRelatedNfts(nftId: string, signal?: AbortSignal) {
+  const { data } = await apiClient.get<NftSummary[]>(
+    `/nfts/${encodeURIComponent(nftId)}/related`,
+    { signal },
+  )
   return data
 }
 
@@ -38,4 +61,16 @@ export const featuredNftQueryOptions = () =>
   queryOptions({
     queryKey: nftQueryKeys.featured(),
     queryFn: ({ signal }) => getFeaturedNft(signal),
+  })
+
+export const nftDetailQueryOptions = (nftId: string) =>
+  queryOptions({
+    queryKey: nftQueryKeys.detail(nftId),
+    queryFn: ({ signal }) => getNftDetail(nftId, signal),
+  })
+
+export const relatedNftsQueryOptions = (nftId: string) =>
+  queryOptions({
+    queryKey: nftQueryKeys.related(nftId),
+    queryFn: ({ signal }) => getRelatedNfts(nftId, signal),
   })

@@ -20,6 +20,9 @@ export type NftSortOption = (typeof NFT_SORT_OPTIONS)[number]
 export const NFT_CATALOG_SEGMENTS = ['all', 'new-releases', 'trending'] as const
 export type NftCatalogSegment = (typeof NFT_CATALOG_SEGMENTS)[number]
 
+export const NFT_EDITION_TIERS = ['one-of-one', 'one-of-ten', 'one-of-fifty', 'open'] as const
+export type NftEditionTier = (typeof NFT_EDITION_TIERS)[number]
+
 export type NftRarity = 'rare'
 
 export type NftImage = {
@@ -40,6 +43,40 @@ export type NftSummary = {
   image: NftImage
   listedAt: string
   version: number
+}
+
+export type NftEdition = {
+  tier: NftEditionTier
+  availableQuantity: number
+  maxPerOrder: number
+}
+
+// Alternative framings of the same artwork; zoom and focus are percentages of the image.
+export type NftGalleryView = {
+  id: string
+  label: string
+  zoom: number
+  focusX: number
+  focusY: number
+}
+
+export type NftDetail = NftSummary & {
+  tokenId: string
+  seriesName: string
+  creatorName: string
+  royaltyPercent: number
+  attributes: string[]
+  summary: string
+  description: string[]
+  networkDescription: string
+  contractAddress: string
+  contractStandard: 'ERC-721'
+  rating: {
+    average: number
+    reviewCount: number
+  }
+  editions: NftEdition[]
+  gallery: NftGalleryView[]
 }
 
 export type NftListFilters = {

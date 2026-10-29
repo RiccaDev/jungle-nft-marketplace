@@ -1,14 +1,19 @@
 import { Link } from '@tanstack/react-router'
+import { cn } from 'cn'
 import cartIcon from '@/assets/figma/header/cart.svg'
 import logoutIcon from '@/assets/figma/header/logout.svg'
 import { HeaderSearch } from './header-search'
+import { useIsMarketRoute } from './use-is-market-route'
 
 const NAV_ITEM_CLASS =
   'flex flex-col gap-6 text-base whitespace-nowrap after:h-[3px] after:w-full after:bg-primary after:content-[\'\']'
+const ACTIVE_NAV_ITEM_CLASS = 'font-bold text-text-accent after:visible'
 
 const COMING_SOON_LABEL = 'Disponível em breve'
 
 export function SiteHeader() {
+  const isMarketRoute = useIsMarketRoute()
+
   return (
     <header className="page-container pt-6 max-md:hidden">
       <div className="flex items-start justify-between gap-6">
@@ -36,7 +41,8 @@ export function SiteHeader() {
                 to="/"
                 hash="catalogo"
                 activeOptions={{ includeHash: true }}
-                className={`${NAV_ITEM_CLASS} after:invisible`}
+                aria-current={isMarketRoute ? 'page' : undefined}
+                className={cn(NAV_ITEM_CLASS, 'after:invisible', isMarketRoute && ACTIVE_NAV_ITEM_CLASS)}
               >
                 Mercado
               </Link>
@@ -76,7 +82,7 @@ export function SiteHeader() {
           </button>
         </div>
       </div>
-      <div aria-hidden="true" className="h-px bg-primary/40" />
+      {!isMarketRoute && <div aria-hidden="true" className="h-px bg-primary/40" />}
     </header>
   )
 }

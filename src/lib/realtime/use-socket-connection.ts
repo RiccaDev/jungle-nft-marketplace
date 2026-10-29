@@ -14,14 +14,17 @@ function getIsConnected() {
   return realtimeSocket.connected
 }
 
-export function useSocketConnection() {
+// Owns the socket lifecycle; mounted once at the application root.
+export function useRealtimeConnection() {
   useEffect(() => {
     realtimeSocket.connect()
     return () => {
       realtimeSocket.disconnect()
     }
   }, [])
+}
 
+export function useSocketStatus() {
   const isConnected = useSyncExternalStore(subscribeToConnectionChanges, getIsConnected)
 
   return {

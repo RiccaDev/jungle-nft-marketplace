@@ -3,6 +3,7 @@ import {
   NFT_COLLECTION_IDS,
   NFT_NETWORK_IDS,
   type FacetCount,
+  type NftDetail,
   type NftListRequest,
   type NftListResponse,
   type NftSortOption,
@@ -80,8 +81,34 @@ function priceRangeOf(records: readonly NftCatalogRecord[]) {
   return { min: sortedPrices[0] ?? '0', max: sortedPrices.at(-1) ?? '0' }
 }
 
-export function toNftSummary({ salesLast7Days, ...summary }: NftCatalogRecord): NftSummary {
-  return summary
+export function toNftSummary(record: NftCatalogRecord): NftSummary {
+  return {
+    id: record.id,
+    name: record.name,
+    collectionId: record.collectionId,
+    network: record.network,
+    priceEth: record.priceEth,
+    previousPriceEth: record.previousPriceEth,
+    availableQuantity: record.availableQuantity,
+    rarity: record.rarity,
+    image: record.image,
+    listedAt: record.listedAt,
+    version: record.version,
+  }
+}
+
+export function toNftDetail({ salesLast7Days, ...detail }: NftCatalogRecord): NftDetail {
+  return detail
+}
+
+const RELATED_NFT_LIMIT = 5
+
+export function findRelatedNfts(records: readonly NftCatalogRecord[], nft: NftCatalogRecord) {
+  return records
+    .filter((record) => record.collectionId === nft.collectionId && record.id !== nft.id)
+    .sort(byMostRecentListing)
+    .slice(0, RELATED_NFT_LIMIT)
+    .map(toNftSummary)
 }
 
 // Facets are disjunctive: each dimension is counted with every other active filter applied,

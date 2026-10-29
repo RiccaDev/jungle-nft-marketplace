@@ -1,9 +1,17 @@
 import type {
   NftCatalogSegment,
   NftCollectionId,
+  NftEditionTier,
   NftNetworkId,
   NftSortOption,
 } from './nft.contracts'
+
+export const NFT_EDITION_LABELS: Record<NftEditionTier, string> = {
+  'one-of-one': '1/1',
+  'one-of-ten': '1/10',
+  'one-of-fifty': '1/50',
+  open: 'Aberta',
+}
 
 export const NFT_COLLECTION_LABELS: Record<NftCollectionId, string> = {
   'digital-art': 'Arte digital',

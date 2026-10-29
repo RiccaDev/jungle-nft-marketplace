@@ -10,7 +10,9 @@ src/
   routes/             rotas baseadas em arquivo do TanStack Router
   features/<x>/       código por domínio: contratos, chamadas REST, query options, hooks e componentes
     home/             composição da Home (hero, promoções, blog) e conteúdo editorial estático
-    nfts/             catálogo: contratos, filtros da URL, API, hooks e componentes
+    nfts/             recurso NFT: contratos, filtros da URL, API, edições, sincronização em tempo real e catálogo
+    nft-detail/       página de detalhe: seleção de edição/quantidade, ações e layouts desktop/mobile
+    realtime-demo/    painel técnico de `/diagnostico`
   components/layout/  cabeçalho, rodapé e tab bar mobile
   components/ui/      componentes shadcn/ui adaptados ao tema
   hooks/              hooks genéricos (debounce, media query)
@@ -21,10 +23,10 @@ src/
   mocks/
     catalog/          consulta do catálogo (busca, filtros, facetas, ordenação, paginação)
     fixtures/         dados determinísticos
-    handlers/         handlers REST do MSW, por recurso
+    handlers/         handlers REST do MSW, por recurso, e endpoints de controle dos mocks
     network/          simulação de latência e falhas
-    realtime/         servidor Socket.IO simulado (MSW `ws` + @mswjs/socket.io-binding)
-    state/            estado mutável dos mocks
+    realtime/         servidor Socket.IO simulado (MSW `ws` + @mswjs/socket.io-binding) e publicação de eventos
+    state/            estado mutável dos mocks (fonte única para REST e eventos)
   assets/figma/       ícones e decorações exportados do Figma
 public/images/nfts/   artes dos NFTs (WebP otimizado a partir dos originais do Figma)
 e2e/                  testes Playwright
@@ -41,7 +43,7 @@ e2e/                  testes Playwright
 
 ```
 REST:      Rota → useQuery(queryOptions) → função da feature → apiClient (Axios) → MSW handler
-Realtime:  MSW socket server → WebSocket (mockado) → socket.io-client → listener da feature → queryClient.setQueryData
+Realtime:  estado do mock → publishNftUpdate → WebSocket (mockado) → socket.io-client → useNftRealtimeSync → queryClient.setQueryData
 URL:       interação → navigate({ search }) → validateSearch (parseNftListFilters) → queryOptions(filtros)
 ```
 
@@ -83,7 +85,38 @@ A URL é a fonte de verdade de busca, filtros, ordenação e paginação. Os nom
 
 Um `role="status"` anuncia "Carregando NFTs…" e o total de resultados a leitores de tela. O shimmer é desativado com `prefers-reduced-motion: reduce`.
 
-### Valores em ETH
+## Detalhe do NFT
+
+### Edições e quantidade
+
+Cada NFT tem 4 edições (`one-of-one`, `one-of-ten`, `one-of-fifty`, `open`, exibidas como 1/1, 1/10, 1/50 e ABERTA), cada uma com estoque próprio (`availableQuantity`) e limite por pedido (`maxPerOrder`: 1, 2, 5 e 10). A disponibilidade do resumo do catálogo é a soma das edições.
+
+- **Edição selecionada:** vem de `?edition=` (validado; troca com `replace`, sem poluir o histórico). Sem parâmetro, usa a edição padrão — a primeira com estoque na ordem 1/50 → 1/10 → ABERTA → 1/1 — **fixada na primeira renderização**, para que uma mudança de estoque em tempo real nunca troque a edição sob o usuário.
+- **Quantidade:** entre 1 e `min(estoque da edição, maxPerOrder)`. A quantidade pedida é guardada; a exibida é limitada ao máximo atual. Se o estoque cair abaixo dela (evento em tempo real), a interface ajusta e avisa.
+- **Esgotados:** edições sem estoque ficam desabilitadas (riscadas e anunciadas como "esgotada"). Se a edição da URL estiver esgotada, ou todas estiverem, o seletor de quantidade é desabilitado e uma mensagem explica o motivo.
+- As regras ficam em `features/nfts/nft-edition-selection.ts` e são reutilizadas pelo mock (a alteração de mercado vende da mesma edição padrão).
+
+### Ações de compra e favoritos
+
+`useNftDetailActions()` é o ponto de integração: devolve, para cada ação, `{ status: 'available', run }` ou `{ status: 'unavailable', reason }`. Hoje ambas estão indisponíveis (carrinho e login não existem). Os botões são renderizados com `aria-disabled`, descrição via `aria-describedby` e o motivo visível na tela; clicar não faz nada. A seleção que será enviada ao carrinho já tem tipo próprio (`NftPurchaseSelection`).
+
+### Galeria
+
+O Figma repete a mesma imagem nas 4 miniaturas. Para não exibir artes que não pertencem ao NFT, a API devolve 4 **vistas** da mesma obra (`gallery`: obra completa e 3 recortes ampliados, com `zoom` e ponto focal). O botão de lupa abre a vista atual em um `Dialog` (foco preso e devolvido ao fechar). No mobile, as miniaturas viram indicadores clicáveis.
+
+### Estados
+
+| Situação                         | Comportamento                                                               |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| Carregando                       | Skeleton com as proporções do layout (desktop ou mobile).                   |
+| 404                              | "NFT não encontrado", com link para o catálogo (sem novas tentativas).      |
+| Outras falhas                    | Mensagem e "Tentar novamente" após as tentativas automáticas.               |
+| Alteração recebida com a página aberta | Aviso em `role="status"` com preço anterior → novo e nova disponibilidade. |
+| Relacionados com falha           | Mensagem local com "Tentar novamente", sem afetar o restante da página.     |
+
+O `loader` da rota apenas dispara `prefetchQuery` (sem `await`): a requisição começa ao passar o mouse sobre um card (`defaultPreload: 'intent'`) e a página continua exibindo o skeleton enquanto ela não termina.
+
+## Valores em ETH
 
 Preços trafegam como strings decimais. Comparações e ordenação usam `BigInt` em wei (18 casas) via `lib/eth/eth-amount.ts`, sem `number` de ponto flutuante. O slider de preço trabalha com inteiros em centésimos de ETH, convertidos de/para string sem perda.
 
@@ -93,9 +126,11 @@ Preços trafegam como strings decimais. Comparações e ordenação usam `BigInt
 | ------ | ----------------------------- | ----------------------------------------------------------------------------- |
 | GET    | `/api/nfts`                   | 200 `NftListResponse`                                                         |
 | GET    | `/api/nfts/featured`          | 200 `NftSummary` · 404 `ApiErrorBody`                                         |
+| GET    | `/api/nfts/:nftId`            | 200 `NftDetail` · 404 `ApiErrorBody` (`NFT_NOT_FOUND`)                        |
+| GET    | `/api/nfts/:nftId/related`    | 200 `NftSummary[]` (até 5 da mesma coleção, mais recentes) · 404              |
 | GET    | `/api/health`                 | 200 `{ status: 'ok', timestamp: string /* ISO */ }`                           |
-| GET    | `/api/demo/nft`               | 200 `{ id, name, priceEth: string, availableQuantity: number, version: number }` |
-| POST   | `/api/__mocks__/nft-updates`  | 202 sem corpo                                                                 |
+| POST   | `/api/__mocks__/nfts/:nftId/market-change` | 202 sem corpo · 404 (controle dos mocks)                         |
+| POST   | `/api/__mocks__/nfts/:nftId/events/:version/replay` | 202 sem corpo · 404 (controle dos mocks)                |
 
 Os tipos estão em `src/features/nfts/nft.contracts.ts` e `src/lib/http/api-error.ts`:
 
@@ -124,26 +159,45 @@ type NftListResponse = {
   }
 }
 
+type NftDetail = NftSummary & {
+  tokenId: string                 // "#0042"
+  seriesName: string              // série artística, ex.: "Kurio Apes"
+  creatorName: string
+  royaltyPercent: number
+  attributes: string[]
+  summary: string                 // "Sobre este NFT"
+  description: string[]           // parágrafos
+  networkDescription: string
+  contractAddress: string
+  contractStandard: 'ERC-721'
+  rating: { average: number; reviewCount: number }
+  editions: { tier: NftEditionTier; availableQuantity: number; maxPerOrder: number }[]
+  gallery: { id: string; label: string; zoom: number; focusX: number; focusY: number }[]
+}
+
 type ApiErrorBody = { error: { code: string; message: string } }
 ```
 
 - `GET /api/nfts` aceita os parâmetros da tabela "Estado na URL" mais `pageSize` (padrão 9, máximo 48).
 - **Facetas disjuntivas:** a contagem de cada coleção considera todos os filtros ativos, exceto o próprio filtro de coleções (o mesmo vale para redes). Assim, selecionar "Música" não zera os contadores das outras coleções.
 - **Segmentos:** "Novos lançamentos" são NFTs listados nos 14 dias anteriores à data de referência do catálogo; "Em alta" são NFTs com 25 ou mais vendas nos últimos 7 dias (campo interno dos mocks, fora do contrato).
-- `/api/health` e `/api/demo/nft` são provisórios e servem para validar a integração ponta a ponta.
-- O prefixo `/api/__mocks__/` é reservado a **endpoints de controle dos mocks**. Eles existem apenas com o MSW ativo e não representam a API do produto. `POST /api/__mocks__/nft-updates` aplica a próxima alteração determinística ao NFT de demonstração e emite `nft.updated`. A resposta não traz dados, para que a interface dependa exclusivamente do evento.
+- `/api/health` é provisório e serve para validar a integração ponta a ponta.
+- O prefixo `/api/__mocks__/` é reservado a **endpoints de controle dos mocks**. Eles existem apenas com o MSW ativo, não representam a API do produto e nunca devolvem os dados alterados, para que a interface dependa do evento ou de um novo GET:
+  - `market-change` aplica ao registro do catálogo a próxima alteração determinística daquele NFT (+0,07 ETH e −1 unidade; +0,09 ETH e −2 unidades; −0,23 ETH e todas as edições esgotadas; em ciclo) e emite `nft.updated`;
+  - `events/:version/replay` reemite, sem alterações, um evento já publicado, simulando entrega duplicada ou atrasada.
 
 ## Eventos Socket.IO
 
 | Evento        | Direção           | Payload                                                                                          |
 | ------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `nft.updated` | servidor → cliente | `{ eventId: string, nftId: string, version: number, priceEth: string, availableQuantity: number, occurredAt: string /* ISO */ }` |
+| `nft.updated` | servidor → cliente | `{ eventId: string, nftId: string, version: number, priceEth: string, availableQuantity: number, editions: { tier, availableQuantity }[], occurredAt: string /* ISO */ }` |
 
-- `eventId` é a identidade estável do evento (`nft.updated:<nftId>:<version>`). `nftId` identifica o recurso afetado, e `version` é monotônica por NFT.
-- Valores em ETH trafegam como strings decimais, e a disponibilidade é um número inteiro.
-- **Ordenação e duplicatas:** o cliente só aplica um evento quando `event.version` é maior que a versão em cache. Eventos duplicados ou antigos são ignorados e não regridem o estado.
-- **Reconciliação:** eventos emitidos durante uma desconexão são perdidos. Por isso, a cada reconexão (exceto a primeira conexão), a feature invalida suas queries, e o REST volta a ser a fonte de verdade.
-- **Ciclo de vida:** listeners são registrados em `useEffect` e removidos na limpeza. A conexão é aberta pelo hook `useSocketConnection` e encerrada no unmount.
+- `eventId` é a identidade estável do evento (`nft.updated:<nftId>:<version>`). `nftId` identifica o recurso afetado, e `version` é monotônica por NFT (a mesma `version` do REST).
+- Valores em ETH trafegam como strings decimais; disponibilidades são inteiras, no total e por edição.
+- **Aplicação única:** `useNftRealtimeSync` (montado uma vez na raiz) recebe o evento e atualiza no cache todas as visões do NFT: detalhe (preço e estoque por edição), listas do catálogo, relacionados e destaque. As listas também são marcadas como desatualizadas (`refetchType: 'none'`): a alteração aparece na hora, e a pertinência a filtros/ordenação é recalculada na próxima consulta, sem piscar a tela.
+- **Ordenação e duplicatas:** cada visão só aplica um evento quando `event.version` é maior que a sua versão. Eventos duplicados ou antigos são ignorados e não regridem o estado.
+- **Reconciliação:** eventos emitidos durante uma desconexão são perdidos. Por isso, a cada reconexão (exceto a primeira conexão), todas as queries `['nfts', …]` são invalidadas e as ativas são reconsultadas via REST.
+- **Ciclo de vida:** a conexão é aberta por `useRealtimeConnection` na raiz e dura enquanto a aplicação estiver aberta; `useSocketStatus` apenas observa e controla o socket (usado em `/diagnostico`). Listeners são registrados em `useEffect` e removidos na limpeza.
 
 ## Política de cache e retries
 
@@ -155,7 +209,7 @@ type ApiErrorBody = { error: { code: string; message: string } }
 | `placeholderData` (lista de NFTs) | `keepPreviousData`             | Evita piscar skeletons a cada mudança de filtro ou página.       |
 | `defaultPreloadStaleTime` (router) | 0                             | O TanStack Query controla o frescor dos dados.                   |
 
-Chaves de query: `['nfts', 'list', NftListRequest]` (com padrões aplicados, para que `/?sort=recently-listed` e `/` compartilhem o cache) e `['nfts', 'featured']`. Componentes que precisam da mesma lista (grade, filtros, gaveta) chamam a mesma `queryOptions`, e o Query deduplica a requisição.
+Chaves de query: `['nfts', 'list', NftListRequest]` (com padrões aplicados, para que `/?sort=recently-listed` e `/` compartilhem o cache), `['nfts', 'featured']`, `['nfts', 'detail', id]` e `['nfts', 'related', id]`. Todas compartilham o prefixo `['nfts']`, usado na reconciliação após reconexão. Componentes que precisam da mesma lista (grade, filtros, gaveta) chamam a mesma `queryOptions`, e o Query deduplica a requisição.
 
 ## Mocking
 
@@ -163,19 +217,21 @@ Chaves de query: `['nfts', 'list', NftListRequest]` (com padrões aplicados, par
 - `src/main.tsx` aguarda `worker.start()` antes de renderizar quando `VITE_ENABLE_MOCKS === 'true'`. A condição é substituída estaticamente pelo Vite, e o chunk de mocks é descartado nos builds sem mocks.
 - A URL do worker considera `BASE_URL`, o que permite deploy em subcaminho.
 - As URLs da API (`src/lib/http/config.ts`) e do servidor Socket.IO (`src/lib/realtime/config.ts`) são compartilhadas entre o código da aplicação e os mocks, para nunca divergirem.
-- O estado dos mocks vive em memória (`src/mocks/state/`) e é reiniciado a cada recarga da página. Handlers REST e o servidor Socket.IO simulado compartilham esse estado, então uma alteração aparece tanto no REST quanto no evento.
+- **Ordem de inicialização:** `src/main.tsx` importa a aplicação dinamicamente **depois** de `worker.start()`. O `engine.io-client` guarda `globalThis.WebSocket` quando o módulo é avaliado; se a aplicação fosse importada estaticamente, o cliente guardaria o WebSocket nativo antes de o MSW substituí-lo, e a conexão iria para a rede real (o `vite preview` responde 200 com HTML e o handshake falha).
+- **Fonte única de dados:** o estado vive em memória em `src/mocks/state/nft-catalog.state.ts` e é reiniciado a cada recarga da página. `GET /api/nfts`, `/featured`, `/:id`, `/:id/related` e os eventos `nft.updated` leem e publicam a partir dos mesmos registros; uma alteração de mercado substitui o registro (com `version + 1`) e o evento é montado a partir dele.
 
 ### Fixtures do catálogo
 
 `src/mocks/fixtures/nft-catalog.fixtures.ts` gera 63 NFTs de forma determinística:
 
-- os 9 primeiros reproduzem a primeira página do Figma (nomes, preços, preço anterior e artes);
+- os 9 primeiros reproduzem a primeira página do Figma (nomes, preços, preço anterior e artes); o Emerald Ape #042 reproduz também o detalhe do Figma (token #0042, Nova Sato, 5% de royalties, nota 4,8 com 19 avaliações, contrato `0x7A42...19E8`);
+- o estoque total de cada NFT é dividido entre as 4 edições de forma determinística, e os textos de detalhe (resumo, descrição, rede, royalties) são montados a partir dos dados do próprio NFT;
 - os outros 54 combinam 18 nomes × 3 edições e distribuem coleções, redes, preços de `0.02` a `12.30` ETH, NFTs esgotados, raros e com preço reduzido;
 - a data de referência é fixa (`2026-10-01T12:00Z`), então "Novos lançamentos" não depende do relógio.
 
 ### Condições de rede
 
-`src/mocks/network/network-conditions.ts` aplica latência padrão de 250 ms aos handlers do catálogo e consulta, a cada requisição, a função `window.__KURIO_NETWORK_CONDITIONS__(request)`, que pode devolver `{ delayMs, status }`. Testes a definem com `page.addInitScript` (antes da primeira requisição); em desenvolvimento, pelo console. Exemplos no README.
+`src/mocks/network/network-conditions.ts` aplica latência padrão de 250 ms aos handlers de NFTs (lista, destaque, detalhe e relacionados) e consulta, a cada requisição, a função `window.__KURIO_NETWORK_CONDITIONS__(request)`, que pode devolver `{ delayMs, status }`. Testes a definem com `page.addInitScript` (antes da primeira requisição); em desenvolvimento, pelo console. Exemplos no README.
 
 ### Transporte Socket.IO simulado
 
@@ -210,7 +266,9 @@ As cores e a família tipográfica (Roboto Mono, servida localmente via `@fontso
 | 1024 – 1279 px | Barra lateral de filtros (260 px) e grade de 2 colunas.                                                     |
 | ≥ 1280 px      | Composição do frame desktop: barra lateral de 310 px e grade de 3 colunas.                                  |
 
-O hero desktop e o mobile são escolhidos com `useMediaQuery` (e não escondidos via CSS), para que só a imagem do hero visível seja baixada e exista um único `h1`.
+No detalhe, abaixo de 768 px vale o frame mobile (imagem com gradiente, folha de detalhes e barra de compra fixa); de 768 a 1023 px, a galeria e as informações ficam empilhadas; a partir de 1024 px, lado a lado como no frame desktop.
+
+O hero desktop e o mobile (e os layouts do detalhe) são escolhidos com `useMediaQuery` (e não escondidos via CSS), para que só a imagem do hero visível seja baixada e exista um único `h1`.
 
 ### Assets
 
@@ -241,9 +299,29 @@ O hero desktop e o mobile são escolhidos com `useMediaQuery` (e não escondidos
 | Favoritar no card mobile                | Botão de coração                                               | Omitido até a etapa de favoritos (exige autenticação).                                                     |
 | Indicadores do carrossel                | Três pontos                                                     | Decorativos (`aria-hidden`), pois há um único slide.                                                       |
 
+#### Detalhe do NFT
+
+| Ponto                                   | Figma                                                         | Implementação e motivo                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Miniaturas da galeria                   | A mesma imagem 4 vezes                                         | 4 vistas da mesma obra (completa e recortes ampliados), sem inventar artes que não pertencem ao NFT.      |
+| Indicadores da galeria (mobile)         | SVG estático de 3 pontos                                       | Botões em CSS, um por vista (4), com estado selecionado, porque são interativos.                           |
+| "Coleção"                               | Usado para a categoria ("Mais desta coleção") e para a série ("Coleção: Kurio Apes") | "Coleção" é a categoria (a mesma dos filtros da Home) e "Série" é o nome da série; os relacionados vêm da mesma coleção. |
+| Metadados                               | ID, coleção e atributos                                         | Também "Série" e "Criador" (o criador é exigido pelo enunciado e no Figma só aparece na descrição).       |
+| Rótulos "Contrato" e "Direitos autorais" | Trocados (o texto de royalties está sob "Contrato" e o endereço sob "Direitos autorais") | Cada rótulo acompanha o conteúdo correspondente.                                         |
+| Edições no mobile                       | "1/10" repetido                                                | As mesmas 4 edições do desktop.                                                                            |
+| Disponibilidade e avisos                | Não desenhados                                                 | Linha de disponibilidade da edição e aviso de alteração em tempo real abaixo da quantidade.               |
+| Compra e favoritos                      | Botões ativos                                                  | Visíveis, com 60% de opacidade, `aria-disabled` e o motivo escrito abaixo.                                 |
+| Aba "Avaliações de colecionadores"      | Aba clicável                                                   | Indisponível (`aria-disabled`): não há conteúdo de avaliações nesta etapa.                                 |
+| Folha de detalhes (mobile)              | Sobrepõe 114 px da imagem                                       | Sobrepõe apenas o fundo (30 px), mantendo a obra inteira visível.                                         |
+| Descrição e relacionados no mobile      | Fora do frame mobile                                            | Exibidos abaixo da folha de detalhes, para não esconder informação em uma largura.                         |
+| Pontos do carrossel de relacionados     | Três pontos                                                     | Omitidos: os relacionados são uma grade, não um carrossel.                                                 |
+| Cards relacionados                      | 219 × 255 px, nome 15 px e preço 16 px                          | Reutilizam o card do catálogo (mesma proporção, nome 16 px e preço 18 px).                                 |
+
 ### Ações fora do escopo atual
 
-Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucesso: "Criadores", "Aprenda", carrinho, "Entrar", links de perfil e ajuda do rodapé, "Ler mais" do blog e os itens da tab bar mobile (exceto Início) têm `aria-disabled="true"` e o título "Disponível em breve". A newsletter informa que a inscrição não está disponível nesta demonstração. "Mercado", as promoções e as coleções do rodapé levam ao catálogo com o filtro correspondente. Os cards levam a `/nfts/:nftId`, uma página provisória que informa que o detalhe está em construção.
+Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucesso: "Criadores", "Aprenda", carrinho, "Entrar", links de perfil e ajuda do rodapé, "Ler mais" do blog e os itens da tab bar mobile (exceto Início) têm `aria-disabled="true"` e o título "Disponível em breve". A newsletter informa que a inscrição não está disponível nesta demonstração. "Mercado", as promoções e as coleções do rodapé levam ao catálogo com o filtro correspondente. No detalhe, comprar, adicionar ao carrinho e favoritar seguem o mesmo princípio (veja "Ações de compra e favoritos"); os links de compartilhamento abrem os serviços reais em nova aba.
+
+No fluxo Mercado (`/nfts/*`), o cabeçalho segue o componente do Figma para telas de mercado: "Mercado" ativo e sem o divisor. No mobile, a tab bar dá lugar à barra de compra fixa do frame de detalhe.
 
 ## Decisões e restrições de versão
 
@@ -254,11 +332,13 @@ Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucess
 - **`src/routeTree.gen.ts` versionado:** o arquivo é gerado pelo plugin do TanStack Router, mas fica versionado para que `typecheck` funcione num checkout limpo, antes do primeiro build.
 - **Playwright sobre o build de demonstração:** os testes usam o mesmo artefato do deploy, e não o servidor de desenvolvimento.
 - **Evidência de tráfego Socket.IO nos testes:** como o WebSocket é mockado dentro da página, o Playwright não o enxerga como tráfego de rede. Por isso, `e2e/realtime.spec.ts` comprova o caminho de três formas: o endpoint de controle não devolve dados; o frame `42["nft.updated",…]` aparece exatamente uma vez no log do MSW; e, com o socket desconectado, a interface não muda.
-- **Página de diagnóstico:** a página provisória da Etapa 2 (status da API e demonstração de tempo real) foi movida de `/` para `/diagnostico`, preservando seus testes.
+- **Página de diagnóstico:** a página provisória da Etapa 2 (status da API e demonstração de tempo real) foi movida de `/` para `/diagnostico`, preservando seus testes. Desde a Etapa 4 ela usa o NFT em destaque do catálogo, e não mais um NFT de demonstração com estado próprio.
+- **Testes que aguardam o socket:** antes de disparar uma alteração, os testes esperam o frame de conexão do Socket.IO (`⬆ 40`) no log do MSW; um evento emitido antes da conexão seria perdido (e corretamente reconciliado apenas na próxima reconexão).
+- **Clique em ações indisponíveis nos testes:** o Playwright trata `aria-disabled="true"` como não acionável; os testes usam `click({ force: true })` para provar que o clique real não tem efeito.
 
 ## Limitações conhecidas
 
-- O catálogo ainda não recebe `nft.updated`: o evento atualiza apenas o NFT de demonstração de `/diagnostico`. A integração com catálogo, detalhe e carrinho entra junto com essas telas.
-- O NFT de demonstração e o endpoint `/api/__mocks__/nft-updates` são provisórios e serão substituídos pelos cenários configuráveis.
-- O estado dos mocks ainda não persiste entre recargas, e ainda não há seleção nem reset de cenários. As condições de rede cobrem apenas os endpoints do catálogo.
+- O carrinho ainda não existe, então `nft.updated` atualiza catálogo, detalhe, relacionados e destaque, mas ainda não um resumo de carrinho.
+- O estado dos mocks ainda não persiste entre recargas, e ainda não há seleção nem reset de cenários. As condições de rede cobrem apenas os endpoints de NFTs.
+- A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
 - `order.updated` e o isolamento de eventos por sessão de usuário ainda não foram implementados; dependem dos fluxos de pedido e autenticação.
