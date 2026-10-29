@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { cn } from 'cn'
-import cartIcon from '@/assets/figma/header/cart.svg'
+import { CartIndicator } from './cart-indicator'
 import { HeaderAccount } from './header-account'
 import { HeaderSearch } from './header-search'
 import { useIsMarketRoute } from './use-is-market-route'
@@ -62,15 +62,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3 lg:gap-7">
           <HeaderSearch />
-          <button
-            type="button"
-            aria-disabled="true"
-            aria-label="Carrinho (disponível em breve)"
-            title={COMING_SOON_LABEL}
-            className="grid size-9 place-items-center rounded-md"
-          >
-            <img src={cartIcon} alt="" width={24} height={24} />
-          </button>
+          <CartIndicator />
           <HeaderAccount />
         </div>
       </div>

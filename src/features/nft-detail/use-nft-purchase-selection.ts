@@ -10,12 +10,14 @@ type UseNftPurchaseSelectionOptions = {
   nft: NftDetail
   urlEditionTier: NftEditionTier | undefined
   onEditionTierChange: (tier: NftEditionTier) => void
+  getQuantityInCart: (tier: NftEditionTier) => number
 }
 
 export function useNftPurchaseSelection({
   nft,
   urlEditionTier,
   onEditionTierChange,
+  getQuantityInCart,
 }: UseNftPurchaseSelectionOptions) {
   // The default is pinned on first render so a realtime stock change never swaps the edition.
   const [defaultEditionTier] = useState(() => pickDefaultEditionTier(nft.editions))
@@ -23,7 +25,10 @@ export function useNftPurchaseSelection({
 
   const selectedEditionTier = urlEditionTier ?? defaultEditionTier
   const selectedEdition = findEdition(nft.editions, selectedEditionTier)
-  const maxQuantity = maxSelectableQuantity(selectedEdition)
+  const stockLimit = maxSelectableQuantity(selectedEdition)
+  const quantityInCart = selectedEditionTier ? getQuantityInCart(selectedEditionTier) : 0
+  // Units already in the cart count towards the per-order limit of the edition.
+  const maxQuantity = Math.max(0, stockLimit - quantityInCart)
   const quantity = Math.min(requestedQuantity, maxQuantity)
 
   function selectEdition(tier: NftEditionTier) {
@@ -36,12 +41,15 @@ export function useNftPurchaseSelection({
     selectedEdition,
     quantity,
     maxQuantity,
-    isEditionSoldOut: maxQuantity === 0,
-    // Only a stock drop (never user input) can push the request above the limit.
-    wasQuantityReduced: requestedQuantity > maxQuantity && maxQuantity > 0,
+    quantityInCart,
+    isEditionSoldOut: stockLimit === 0,
+    isCartLimitReached: stockLimit > 0 && maxQuantity === 0,
+    // Only a stock drop (never user input or the cart) can push the request above the stock.
+    wasQuantityReduced: requestedQuantity > stockLimit && stockLimit > 0,
     selectEdition,
     increaseQuantity: () => setRequestedQuantity(Math.min(quantity + 1, maxQuantity)),
     decreaseQuantity: () => setRequestedQuantity(Math.max(quantity - 1, 1)),
+    resetQuantity: () => setRequestedQuantity(1),
   }
 }
 

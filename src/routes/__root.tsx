@@ -5,9 +5,12 @@ import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
 import { useIsAuthRoute, useIsMarketRoute } from '@/components/layout/use-is-market-route'
+import { NoticeBanner } from '@/components/notice-banner'
 import { Button } from '@/components/ui/button'
 import { SessionExpiredBanner } from '@/features/auth/components/session-expired-banner'
 import { useSessionLifecycle } from '@/features/auth/use-session-lifecycle'
+import { useCartRealtimeSync } from '@/features/cart/use-cart-realtime-sync'
+import { useCartSessionSync } from '@/features/cart/use-cart-session-sync'
 import { useNftRealtimeSync } from '@/features/nfts/use-nft-realtime-sync'
 import { useRealtimeConnection } from '@/lib/realtime/use-socket-connection'
 
@@ -19,7 +22,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
   useRealtimeConnection()
   useNftRealtimeSync()
+  useCartRealtimeSync()
   const { hasExpiredSessionNotice, dismissExpiredSessionNotice } = useSessionLifecycle()
+  const { mergeNotice, dismissMergeNotice } = useCartSessionSync()
   const isMarketRoute = useIsMarketRoute()
   const isAuthRoute = useIsAuthRoute()
 
@@ -35,6 +40,7 @@ function RootLayout() {
       {hasExpiredSessionNotice && !isAuthRoute && (
         <SessionExpiredBanner onDismiss={dismissExpiredSessionNotice} />
       )}
+      {mergeNotice && <NoticeBanner onDismiss={dismissMergeNotice}>{mergeNotice}</NoticeBanner>}
       <main id="conteudo" className={cn('md:pb-0', isMarketRoute ? 'pb-[200px]' : 'pb-[150px]')}>
         <Outlet />
       </main>

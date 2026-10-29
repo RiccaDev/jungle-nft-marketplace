@@ -9,7 +9,7 @@ import { DesktopNftDetail } from './components/desktop-nft-detail'
 import { MobileNftDetail } from './components/mobile-nft-detail'
 import { NftDetailMessage } from './components/nft-detail-message'
 import { NftDetailSkeleton } from './components/nft-detail-skeleton'
-import { useNftDetailActions } from './nft-detail-actions'
+import { useCartQuantityLookup, useNftDetailActions } from './nft-detail-actions'
 import { useNftChangeNotice } from './use-nft-change-notice'
 import { useNftPurchaseSelection } from './use-nft-purchase-selection'
 
@@ -23,17 +23,23 @@ type NftDetailContentProps = {
 
 function NftDetailContent({ nft, urlEditionTier, isDesktop }: NftDetailContentProps) {
   const navigate = nftDetailRoute.useNavigate()
-  const actions = useNftDetailActions()
   const changeNotice = useNftChangeNotice(nft)
   const selection = useNftPurchaseSelection({
     nft,
     urlEditionTier,
     onEditionTierChange: (edition) =>
       void navigate({ search: { edition }, replace: true, resetScroll: false }),
+    getQuantityInCart: useCartQuantityLookup(nft.id),
+  })
+  const { cart, favorite } = useNftDetailActions({
+    nftId: nft.id,
+    editionTier: selection.selectedEditionTier,
+    quantity: selection.quantity,
+    onAdded: selection.resetQuantity,
   })
 
   const Layout = isDesktop ? DesktopNftDetail : MobileNftDetail
-  return <Layout nft={nft} selection={selection} actions={actions} changeNotice={changeNotice} />
+  return <Layout nft={nft} selection={selection} cart={cart} favorite={favorite} changeNotice={changeNotice} />
 }
 
 export function NftDetailPage() {

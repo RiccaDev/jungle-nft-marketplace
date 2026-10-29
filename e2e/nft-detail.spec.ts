@@ -127,16 +127,14 @@ test.describe('detalhe do NFT no desktop', () => {
     )
   })
 
-  test('deixa compra e favoritos indisponíveis, sem simular sucesso', async ({ page }) => {
+  test('deixa favoritos indisponíveis, sem simular sucesso', async ({ page }) => {
     await page.goto('/nfts/emerald-ape-042')
 
-    for (const name of ['COMPRAR', 'Favoritar']) {
-      const button = page.getByRole('button', { name })
-      await expect(button).toHaveAttribute('aria-disabled', 'true')
-      await expect(button).toHaveAccessibleDescription(/compra será habilitada junto com o carrinho/)
-      // Playwright treats aria-disabled as non-actionable; force proves a real click is inert.
-      await button.click({ force: true })
-    }
+    const favoriteButton = page.getByRole('button', { name: 'Favoritar' })
+    await expect(favoriteButton).toHaveAttribute('aria-disabled', 'true')
+    await expect(favoriteButton).toHaveAccessibleDescription(/Favoritos serão habilitados/)
+    // Playwright treats aria-disabled as non-actionable; force proves a real click is inert.
+    await favoriteButton.click({ force: true })
     await expect(page).toHaveURL(/\/nfts\/emerald-ape-042$/)
   })
 
@@ -229,7 +227,7 @@ test.describe('detalhe do NFT no mobile', () => {
     await expect(buyBar.getByTestId('nft-detail-price')).toHaveText('0.39 ETH')
     await buyBar.getByRole('button', { name: 'Aumentar quantidade' }).click()
     await expect(buyBar.getByRole('status', { name: 'Quantidade selecionada' })).toHaveText('2')
-    await expect(buyBar.getByRole('button', { name: 'Comprar NFT' })).toHaveAttribute('aria-disabled', 'true')
+    await expect(buyBar.getByRole('button', { name: 'Comprar NFT' })).toBeEnabled()
 
     await page.getByRole('button', { name: 'Voltar' }).click()
     await expect(page).toHaveURL(/\/$/)

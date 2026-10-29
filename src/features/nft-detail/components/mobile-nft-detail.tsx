@@ -1,55 +1,40 @@
-import { useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
 import { useId } from 'react'
-import mobileBackArrowIcon from '@/assets/figma/detail/mobile-back-arrow.svg'
 import mobileCartIcon from '@/assets/figma/detail/mobile-cart.svg'
 import mobileFavoriteIcon from '@/assets/figma/detail/mobile-favorite.svg'
+import { BackButton } from '@/components/back-button'
+import { QuantityStepper } from '@/components/quantity-stepper'
 import { formatEth } from '@/lib/eth/eth-amount'
 import { AvailabilityStatus } from './availability-status'
+import { CartLineStatus } from './cart-line-status'
 import type { NftDetailLayoutProps } from './desktop-nft-detail'
 import { EditionSelector } from './edition-selector'
 import { NftDescriptionSection } from './nft-description-section'
 import { NftGallery } from './nft-gallery'
 import { NftRatingBadge } from './nft-rating'
 import { NftTokenInfo } from './nft-token-info'
-import { QuantityStepper } from './quantity-stepper'
 import { RelatedNftsSection } from './related-nfts-section'
 import { UnavailableActionButton } from './unavailable-action-button'
 
 const ROUND_ICON_BUTTON_CLASS =
   'grid size-[35px] place-items-center rounded-full border border-border bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 
-function BackButton() {
-  const router = useRouter()
-  const navigate = useNavigate()
-  const canGoBack = useCanGoBack()
-
-  return (
-    <button
-      type="button"
-      aria-label="Voltar"
-      onClick={() => (canGoBack ? router.history.back() : void navigate({ to: '/' }))}
-      className={ROUND_ICON_BUTTON_CLASS}
-    >
-      <img src={mobileBackArrowIcon} alt="" width={13} height={7} className="rotate-90" />
-    </button>
-  )
-}
-
-export function MobileNftDetail({ nft, selection, actions, changeNotice }: NftDetailLayoutProps) {
-  const reasonId = useId()
-  const unavailableReasons = [actions.purchase, actions.favorite]
-    .map((action) => (action.status === 'unavailable' ? action.reason : null))
-    .filter(Boolean)
-    .join(' ')
+export function MobileNftDetail({ nft, selection, cart, favorite, changeNotice }: NftDetailLayoutProps) {
+  const favoriteReasonId = useId()
+  const canPurchase = selection.quantity > 0 && !cart.isAdding
 
   return (
     <div className="flex flex-col">
       <div className="bg-[linear-gradient(137.6deg,var(--gm-surface-card)_12%,var(--gm-surface-raised)_106.6%)] px-7 pt-6 pb-[60px]">
         <div className="mb-2 flex items-center justify-between">
           <BackButton />
-          <UnavailableActionButton reasonId={reasonId} label="Favoritar" className={ROUND_ICON_BUTTON_CLASS}>
+          <UnavailableActionButton reasonId={favoriteReasonId} label="Favoritar" className={ROUND_ICON_BUTTON_CLASS}>
             <img src={mobileFavoriteIcon} alt="" width={16} height={14} />
           </UnavailableActionButton>
+          {favorite.status === 'unavailable' && (
+            <span id={favoriteReasonId} className="sr-only">
+              {favorite.reason}
+            </span>
+          )}
         </div>
         <NftGallery nft={nft} variant="mobile" />
       </div>
@@ -98,23 +83,25 @@ export function MobileNftDetail({ nft, selection, actions, changeNotice }: NftDe
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <UnavailableActionButton
-            reasonId={reasonId}
-            className="h-[60px] flex-1 rounded-[40px] bg-[linear-gradient(100.4deg,var(--gm-primary)_4%,rgb(210_138_76/0.8)_122%)] text-base leading-5 font-bold text-ink"
+          <button
+            type="button"
+            onClick={cart.buyNow}
+            disabled={!canPurchase}
+            className="h-[60px] flex-1 rounded-[40px] bg-[linear-gradient(100.4deg,var(--gm-primary)_4%,rgb(210_138_76/0.8)_122%)] text-base leading-5 font-bold text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Comprar NFT
-          </UnavailableActionButton>
-          <UnavailableActionButton
-            reasonId={reasonId}
-            label="Adicionar ao carrinho"
-            className="grid size-[60px] shrink-0 place-items-center rounded-[40px] border border-border bg-surface-raised"
+            {cart.isAdding ? 'Adicionando…' : 'Comprar NFT'}
+          </button>
+          <button
+            type="button"
+            onClick={cart.addToCart}
+            disabled={!canPurchase}
+            aria-label="Adicionar ao carrinho"
+            className="grid size-[60px] shrink-0 place-items-center rounded-[40px] border border-border bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
           >
             <img src={mobileCartIcon} alt="" width={20} height={20} />
-          </UnavailableActionButton>
+          </button>
         </div>
-        <p id={reasonId} className="text-xs text-text-secondary">
-          {unavailableReasons}
-        </p>
+        <CartLineStatus cart={cart} />
       </div>
     </div>
   )

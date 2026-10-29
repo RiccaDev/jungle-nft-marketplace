@@ -2,7 +2,7 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho, checkout, perfil completo, carteiras e favoritos ainda não foram implementados: essas ações aparecem indisponíveis.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. **Carrinho e cotação (Etapa 6) em andamento:** funcionais em `/carrinho` e testados em `e2e/cart.spec.ts`, mas a documentação da etapa ainda está pendente (veja "Pendências da Etapa 6" no [ARCHITECTURE.md](ARCHITECTURE.md)). Checkout, perfil completo, carteiras e favoritos ainda não foram implementados.
 
 ## Credenciais fictícias
 

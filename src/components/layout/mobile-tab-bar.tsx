@@ -75,7 +75,9 @@ export function MobileTabBar() {
           </span>
         </button>
 
-        <UnavailableTab label="Carrinho" icon={shopIcon} className="left-[70.53%]" />
+        <Link to="/carrinho" aria-label="Carrinho" className="absolute top-[71px] left-[70.53%] grid size-5 place-items-center">
+          <img src={shopIcon} alt="" width={20} height={20} />
+        </Link>
         <Link to="/perfil" aria-label="Perfil" className="absolute top-[71px] left-[85.51%] grid size-5 place-items-center">
           <img src={userIcon} alt="" width={20} height={20} />
         </Link>

@@ -434,6 +434,17 @@ No fluxo Mercado (`/nfts/*`), o cabeçalho segue o componente do Figma para tela
 - **Requisições disparadas pelos testes:** `fetch` executado logo após o `goto` pode sair antes de o Service Worker do MSW controlar a página e chegar ao servidor de preview. Os testes esperam um elemento da aplicação (que só renderiza depois de os mocks iniciarem) antes de chamar endpoints diretamente.
 - **Clique em ações indisponíveis nos testes:** o Playwright trata `aria-disabled="true"` como não acionável; os testes usam `click({ force: true })` para provar que o clique real não tem efeito.
 
+## Pendências da Etapa 6 (carrinho e cotação)
+
+A etapa está funcional e coberta por `e2e/cart.spec.ts`, mas não foi concluída formalmente. Já implementado: endpoints `/api/cart*` (itens, cupom, cotação, mescla), carrinho de visitante persistido, mescla no login (maior quantidade por linha, limitada ao estoque), isolamento por usuário (`['private', userId, 'cart']`), cotação em wei calculada pela API e chaveada pela "impressão digital" do carrinho, `nft.updated` aplicado ao carrinho, avisos de alteração, atualização otimista com rollback na quantidade, indicador no cabeçalho e integração com o detalhe.
+
+Pendente:
+
+- Documentar neste arquivo e no README os contratos do carrinho e da cotação, cupons de teste (`KURIO10`, `GENESIS`, `VERAO2025` expirado), taxas por rede, regra de mescla, política de cache da cotação e instruções de validação manual.
+- Registrar os desvios do Figma do carrinho. O limite do Figma MCP impediu ler estilos dos frames 11:1278 e 16:360; a tela foi montada a partir da estrutura e dos textos do metadata salvo na Etapa 1 e dos tokens já usados nas outras telas. Desvios conhecidos: coluna "Edições" renomeada para "Quantidade"; ícone de lixeira do Lucide (o asset do Figma não pôde ser baixado); seletor de quantidade 20×30 reutilizado no mobile (o frame usa quadrados de 24 px); resumo do pagamento no mobile como seção no fluxo, e não fixo na base; "Colecionadores também viram" apenas a partir de 768 px.
+- Executar a suíte completa repetidas vezes (verificação de estabilidade) e revisar visualmente o carrinho após as últimas correções (selo do cabeçalho e nomes em duas linhas no mobile).
+- Ajustar o espaçamento inferior de `/carrinho` no mobile (herda os 200 px reservados para a barra de compra do detalhe).
+
 ## Limitações conhecidas
 
 - O carrinho ainda não existe, então `nft.updated` atualiza catálogo, detalhe, relacionados e destaque, mas ainda não um resumo de carrinho.

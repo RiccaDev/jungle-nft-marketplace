@@ -21,6 +21,9 @@ function profileLink(page: Page, displayName: string) {
 }
 
 async function expireCurrentSession(page: Page) {
+  // Requests still in flight (e.g. the account cart loaded after login) would hit the expired
+  // session first; settle them so the expiration is observed by the next user action.
+  await page.waitForLoadState('networkidle')
   const status = await page.evaluate(async (tokenKey) => {
     const token = localStorage.getItem(tokenKey)
     const response = await fetch('/api/__mocks__/auth/expire-session', {

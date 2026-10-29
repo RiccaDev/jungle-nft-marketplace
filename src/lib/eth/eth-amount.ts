@@ -23,6 +23,29 @@ export function formatEth(value: string) {
   return `${value} ETH`
 }
 
+const MIN_DISPLAY_FRACTION_DIGITS = 2
+
+// Decimal string with trailing zeros trimmed, keeping at least two fraction digits ("1.20", "26.846").
+export function weiToEth(wei: bigint) {
+  const sign = wei < 0n ? '-' : ''
+  const absoluteWei = wei < 0n ? -wei : wei
+  const whole = absoluteWei / WEI_PER_ETH
+  const fraction = (absoluteWei % WEI_PER_ETH)
+    .toString()
+    .padStart(ETH_DECIMALS, '0')
+    .replace(/0+$/, '')
+    .padEnd(MIN_DISPLAY_FRACTION_DIGITS, '0')
+  return `${sign}${whole}.${fraction}`
+}
+
+export function multiplyEth(value: string, quantity: number) {
+  return weiToEth(ethToWei(value) * BigInt(quantity))
+}
+
+export function sumEth(values: readonly string[]) {
+  return weiToEth(values.reduce((total, value) => total + ethToWei(value), 0n))
+}
+
 const WEI_PER_HUNDREDTH = WEI_PER_ETH / 100n
 
 // Integer hundredths of ETH, used by range inputs that cannot hold decimal strings safely.

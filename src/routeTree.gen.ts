@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CarrinhoRouteImport } from './routes/carrinho'
 import { Route as DiagnosticoRouteImport } from './routes/diagnostico'
 import { Route as EntrarRouteImport } from './routes/entrar'
 import { Route as AuthenticatedPerfilRouteImport } from './routes/_authenticated/perfil'
@@ -29,6 +30,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const CadastroRoute = CadastroRouteImport.update({
   id: '/cadastro',
   path: '/cadastro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CarrinhoRoute = CarrinhoRouteImport.update({
+  id: '/carrinho',
+  path: '/carrinho',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiagnosticoRoute = DiagnosticoRouteImport.update({
@@ -55,6 +61,7 @@ const NftsNftIdRoute = NftsNftIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/cadastro': typeof CadastroRoute
+  '/carrinho': typeof CarrinhoRoute
   '/diagnostico': typeof DiagnosticoRoute
   '/entrar': typeof EntrarRoute
   '/perfil': typeof AuthenticatedPerfilRoute
@@ -63,6 +70,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cadastro': typeof CadastroRoute
+  '/carrinho': typeof CarrinhoRoute
   '/diagnostico': typeof DiagnosticoRoute
   '/entrar': typeof EntrarRoute
   '/perfil': typeof AuthenticatedPerfilRoute
@@ -73,6 +81,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/cadastro': typeof CadastroRoute
+  '/carrinho': typeof CarrinhoRoute
   '/diagnostico': typeof DiagnosticoRoute
   '/entrar': typeof EntrarRoute
   '/_authenticated/perfil': typeof AuthenticatedPerfilRoute
@@ -81,15 +90,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/cadastro' | '/diagnostico' | '/entrar' | '/perfil' | '/nfts/$nftId'
+    | '/'
+    | '/cadastro'
+    | '/carrinho'
+    | '/diagnostico'
+    | '/entrar'
+    | '/perfil'
+    | '/nfts/$nftId'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/' | '/cadastro' | '/diagnostico' | '/entrar' | '/perfil' | '/nfts/$nftId'
+    | '/'
+    | '/cadastro'
+    | '/carrinho'
+    | '/diagnostico'
+    | '/entrar'
+    | '/perfil'
+    | '/nfts/$nftId'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/cadastro'
+    | '/carrinho'
     | '/diagnostico'
     | '/entrar'
     | '/_authenticated/perfil'
@@ -100,6 +122,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   CadastroRoute: typeof CadastroRoute
+  CarrinhoRoute: typeof CarrinhoRoute
   DiagnosticoRoute: typeof DiagnosticoRoute
   EntrarRoute: typeof EntrarRoute
   NftsNftIdRoute: typeof NftsNftIdRoute
@@ -126,6 +149,13 @@ declare module '@tanstack/react-router' {
       path: '/cadastro'
       fullPath: '/cadastro'
       preLoaderRoute: typeof CadastroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carrinho': {
+      id: '/carrinho'
+      path: '/carrinho'
+      fullPath: '/carrinho'
+      preLoaderRoute: typeof CarrinhoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/diagnostico': {
@@ -175,6 +205,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   CadastroRoute: CadastroRoute,
+  CarrinhoRoute: CarrinhoRoute,
   DiagnosticoRoute: DiagnosticoRoute,
   EntrarRoute: EntrarRoute,
   NftsNftIdRoute: NftsNftIdRoute,
