@@ -1,0 +1,103 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Raw tokens read from the Figma file variables (GreenMint marketplace).
+ * The design ships a single dark theme, so there is no light/dark switch.
+ */
+:root {
+  --gm-ink: #140d0a;
+  --gm-surface-card: #241612;
+  --gm-surface-raised: #2f1d15;
+  --gm-surface-dark: #38220f;
+  --gm-border: #3f2319;
+  --gm-border-soft: #55321f;
+  --gm-primary: #d28a4c;
+  --gm-secondary: #b39463;
+  --gm-text-primary: #f7f3ec;
+  --gm-text-secondary: #cfb28c;
+  --gm-text-accent: #e89b55;
+  --gm-foreground: #f5f1eb;
+  --gm-gray-light: #ededed;
+  --gm-background-elevated: #fbfbfb;
+
+  /*
+   * shadcn/ui semantic tokens mapped onto the Figma palette.
+   * Provisional: radius and destructive are not defined in the Figma variables
+   * and keep shadcn defaults until the screens are implemented.
+   */
+  --radius: 0.625rem;
+  --background: var(--gm-ink);
+  --foreground: var(--gm-foreground);
+  --card: var(--gm-surface-card);
+  --card-foreground: var(--gm-foreground);
+  --popover: var(--gm-surface-raised);
+  --popover-foreground: var(--gm-foreground);
+  --primary: var(--gm-primary);
+  --primary-foreground: var(--gm-ink);
+  --secondary: var(--gm-surface-dark);
+  --secondary-foreground: var(--gm-foreground);
+  --muted: var(--gm-surface-raised);
+  --muted-foreground: var(--gm-text-secondary);
+  --accent: var(--gm-surface-raised);
+  --accent-foreground: var(--gm-text-accent);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: var(--gm-border);
+  --input: var(--gm-border-soft);
+  --ring: var(--gm-primary);
+}
+
+@theme inline {
+  --font-sans: 'Roboto Mono Variable', ui-monospace, monospace;
+  --font-mono: 'Roboto Mono Variable', ui-monospace, monospace;
+
+  --color-ink: var(--gm-ink);
+  --color-surface-card: var(--gm-surface-card);
+  --color-surface-raised: var(--gm-surface-raised);
+  --color-surface-dark: var(--gm-surface-dark);
+  --color-border-soft: var(--gm-border-soft);
+  --color-brand-secondary: var(--gm-secondary);
+  --color-text-primary: var(--gm-text-primary);
+  --color-text-secondary: var(--gm-text-secondary);
+  --color-text-accent: var(--gm-text-accent);
+  --color-gray-light: var(--gm-gray-light);
+  --color-background-elevated: var(--gm-background-elevated);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
