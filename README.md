@@ -2,7 +2,7 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação do projeto concluída. As telas do marketplace ainda não foram implementadas.
+> **Status:** fundação do projeto e prova técnica de tempo real (Socket.IO + MSW) concluídas. As telas do marketplace ainda não foram implementadas.
 
 ## Requisitos
 
@@ -21,6 +21,7 @@ npx playwright install chromium   # necessário apenas para os testes E2E
 | ------------------- | ------ | ------------------------------------------------------------------------- |
 | `VITE_ENABLE_MOCKS` | —      | `true` inicia o MSW antes da renderização e ativa a API simulada.          |
 | `VITE_API_BASE_URL` | `/api` | URL base das chamadas REST. É usada tanto pelo Axios quanto pelo MSW.      |
+| `VITE_SOCKET_URL`   | origem da página | Origem do servidor Socket.IO, usada pelo `socket.io-client` e pelo MSW. |
 
 Arquivos versionados:
 
@@ -52,3 +53,17 @@ O Playwright gera o build de demonstração, sobe o `vite preview` na porta 4173
 - `mobile-chromium`: Pixel 7.
 
 O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em `test-results/`.
+
+| Arquivo                  | Cobertura                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `e2e/smoke.spec.ts`      | `GET /api/health` via MSW e página de rota inexistente.                                        |
+| `e2e/realtime.spec.ts`   | `nft.updated` entregue pelo `socket.io-client` e reconciliação via REST após reconexão.         |
+
+## Demonstração provisória de tempo real
+
+A página inicial exibe um NFT fictício, servido pelo MSW, e dois controles:
+
+- **Simular alteração no servidor:** chama o endpoint de controle do mock. O mock altera o estado do NFT e emite `nft.updated` pelo Socket.IO. A resposta REST não traz dados (`202`), então a interface só muda ao receber o evento.
+- **Desconectar/Reconectar socket:** com o socket desconectado, a alteração não chega à interface. Ao reconectar, o NFT é reconsultado via REST.
+
+As alterações seguem uma sequência determinística de preço e disponibilidade (`0.82/9`, `0.91/7`, `0.68/0`, em ciclo). O estado do mock é reiniciado a cada recarga da página.
