@@ -9,9 +9,14 @@ type MockSessionRecord = {
   expiresAt: string
 }
 
+type EditableUserFields = Pick<MockUserRecord, 'displayName' | 'username' | 'email' | 'avatarUrl' | 'passwordSalt' | 'passwordHash'>
+
 type PersistedAuthState = {
   registeredUsers: MockUserRecord[]
   sessions: MockSessionRecord[]
+  // Changes to fixture users (profile, avatar, password); fixtures themselves stay immutable.
+  // Optional: states persisted before profile editing existed do not have it.
+  fixtureUserChanges?: Record<string, Partial<EditableUserFields>>
 }
 
 export type SessionLookup =
@@ -44,7 +49,12 @@ function persistState() {
 }
 
 function allUsers() {
-  return [...FIXTURE_USERS, ...state.registeredUsers]
+  const fixtureUsers = FIXTURE_USERS.map((user) => ({ ...user, ...state.fixtureUserChanges?.[user.id] }))
+  return [...fixtureUsers, ...state.registeredUsers]
+}
+
+export function findUserById(userId: string) {
+  return allUsers().find((user) => user.id === userId)
 }
 
 export function toAuthUser({ id, username, email, displayName }: MockUserRecord): AuthUser {
@@ -52,7 +62,7 @@ export function toAuthUser({ id, username, email, displayName }: MockUserRecord)
 }
 
 export function toAccount(user: MockUserRecord): AccountResponse {
-  return { ...toAuthUser(user), memberSince: user.memberSince }
+  return { ...toAuthUser(user), memberSince: user.memberSince, avatarUrl: user.avatarUrl ?? null }
 }
 
 export function findUserByEmail(email: string) {
@@ -81,6 +91,7 @@ export async function createUser(input: { username: string; email: string; passw
     email: normalizeEmail(input.email),
     displayName: username,
     memberSince: new Date().toISOString(),
+    avatarUrl: null,
     passwordSalt,
     passwordHash: await hashPassword(input.password, passwordSalt),
   }
@@ -120,4 +131,32 @@ export function expireSession(token: string) {
   session.expiresAt = new Date(Date.now() - 1000).toISOString()
   persistState()
   return true
+}
+
+export function updateUser(userId: string, changes: Partial<EditableUserFields>) {
+  const registeredIndex = state.registeredUsers.findIndex((user) => user.id === userId)
+  const registeredUser = state.registeredUsers[registeredIndex]
+  if (registeredUser) {
+    state.registeredUsers[registeredIndex] = { ...registeredUser, ...changes }
+  } else {
+    state.fixtureUserChanges = {
+      ...state.fixtureUserChanges,
+      [userId]: { ...state.fixtureUserChanges?.[userId], ...changes },
+    }
+  }
+  persistState()
+  return findUserById(userId)
+}
+
+// A new salt and hash replace the old ones; other sessions of the user are revoked, so a
+// leaked token stops working after the password change. The current session is kept.
+export async function changePassword(userId: string, newPassword: string, currentToken: string) {
+  const passwordSalt = createSalt()
+  const passwordHash = await hashPassword(newPassword, passwordSalt)
+  state.sessions = state.sessions.filter((session) => session.userId !== userId || session.token === currentToken)
+  return updateUser(userId, { passwordSalt, passwordHash })
+}
+
+export async function verifyUserPassword(user: MockUserRecord, password: string) {
+  return (await hashPassword(password, user.passwordSalt)) === user.passwordHash
 }

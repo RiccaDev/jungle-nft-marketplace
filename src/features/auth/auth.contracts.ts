@@ -26,6 +26,8 @@ export type RegisterRequest = {
 
 export type AccountResponse = AuthUser & {
   memberSince: string
+  // Data URL of the uploaded avatar (simulated storage); null shows the initials.
+  avatarUrl: string | null
 }
 
 export const AUTH_ERROR_CODES = {

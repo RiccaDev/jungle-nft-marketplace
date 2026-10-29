@@ -21,7 +21,13 @@ export function validateEmail(email: string) {
   return undefined
 }
 
-function validateNewPassword(password: string) {
+export function validateUsername(value: string) {
+  const username = value.trim()
+  if (!username) return 'Informe um nome de usuário.'
+  return USERNAME_PATTERN.test(username) ? undefined : 'Use de 3 a 20 letras, números, ponto ou sublinhado.'
+}
+
+export function validateNewPassword(password: string) {
   if (!password) return 'Informe uma senha.'
   if (password.length < PASSWORD_MIN_LENGTH) {
     return `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`
@@ -50,13 +56,8 @@ export function validateLogin(values: LoginRequest): FieldErrors<LoginRequest> {
 }
 
 export function validateRegistration(values: RegisterRequest): FieldErrors<RegisterRequest> {
-  const username = values.username.trim()
   return withoutEmptyEntries({
-    username: !username
-      ? 'Informe um nome de usuário.'
-      : USERNAME_PATTERN.test(username)
-        ? undefined
-        : 'Use de 3 a 20 letras, números, ponto ou sublinhado.',
+    username: validateUsername(values.username),
     email: validateEmail(values.email),
     password: validateNewPassword(values.password),
   })

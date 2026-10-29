@@ -3,6 +3,8 @@ import { privateQueryKeys } from '@/features/auth/auth.api'
 import { apiClient } from '@/lib/http/api-client'
 import type {
   ConnectWalletRequest,
+  CreateWalletRequest,
+  UpdateWalletRequest,
   WalletConnectionResponse,
   WalletListResponse,
 } from './wallet.contracts'
@@ -14,6 +16,21 @@ export const walletQueryKeys = {
 
 export async function getWallets(signal?: AbortSignal) {
   const { data } = await apiClient.get<WalletListResponse>('/me/wallets', { signal })
+  return data.wallets
+}
+
+export async function createWallet(request: CreateWalletRequest) {
+  const { data } = await apiClient.post<WalletListResponse>('/me/wallets', request)
+  return data.wallets
+}
+
+export async function updateWallet({ walletId, ...request }: UpdateWalletRequest & { walletId: string }) {
+  const { data } = await apiClient.patch<WalletListResponse>(`/me/wallets/${encodeURIComponent(walletId)}`, request)
+  return data.wallets
+}
+
+export async function makeWalletPrimary(walletId: string) {
+  const { data } = await apiClient.post<WalletListResponse>(`/me/wallets/${encodeURIComponent(walletId)}/make-primary`)
   return data.wallets
 }
 

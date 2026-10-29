@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { cn } from 'cn'
 import { useId, useState, type Ref } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -144,10 +145,24 @@ export function WalletPanel({ userId, requirementError, connectButtonRef, disabl
         />
       )}
 
-      {wallets.isSuccess && connection.isSuccess && !connection.data && (
+      {wallets.isSuccess && connection.isSuccess && !connection.data && walletList.length === 0 && (
+        <div data-testid="checkout-no-wallets" className="flex flex-col items-start gap-3 rounded-lg bg-surface-card p-4 text-sm">
+          <p>Você ainda não tem carteiras cadastradas.</p>
+          <Link to="/perfil/carteiras" className="font-bold text-text-accent underline underline-offset-2">
+            Cadastrar carteira no perfil
+          </Link>
+        </div>
+      )}
+
+      {wallets.isSuccess && connection.isSuccess && !connection.data && walletList.length > 0 && (
         <div className="flex flex-col gap-4">
           <fieldset className="flex flex-col gap-3">
-            <legend className="mb-3 text-[15px] leading-4 font-bold">Carteira cadastrada</legend>
+            <legend className="mb-3 flex w-full flex-wrap justify-between gap-2 text-[15px] leading-4 font-bold">
+              Carteira cadastrada
+              <Link to="/perfil/carteiras" className="text-sm font-normal text-text-accent underline underline-offset-2">
+                Gerenciar carteiras
+              </Link>
+            </legend>
             <div className="grid gap-3 md:grid-cols-2">
               {walletList.map((wallet) => (
                 <WalletOption

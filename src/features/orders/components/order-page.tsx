@@ -170,6 +170,10 @@ export function OrderPage({ userId, orderId }: { userId: string; orderId: string
             <Link to="/" className="hover:text-text-accent">Início</Link>
             <span aria-hidden="true"> /</span>
           </li>
+          <li>
+            <Link to="/perfil/pedidos" className="hover:text-text-accent">Meus pedidos</Link>
+            <span aria-hidden="true"> /</span>
+          </li>
           <li aria-current="page">Pedido</li>
         </ol>
       </nav>

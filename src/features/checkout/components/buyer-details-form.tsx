@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
+import { TextField } from '@/components/text-field'
 import type { FieldErrors } from '@/features/auth/auth-validation'
 import type { BuyerDetails } from '@/features/orders/order.contracts'
-import { CheckoutTextField } from './checkout-text-field'
 
 type BuyerDetailsFormProps = {
   formId: string
@@ -27,7 +27,7 @@ export function BuyerDetailsForm({
         1. Dados do colecionador
       </h2>
       <form id={formId} onSubmit={onSubmit} noValidate className="grid gap-4 md:grid-cols-2">
-        <CheckoutTextField
+        <TextField
           id="buyer-full-name"
           label="Nome completo"
           type="text"
@@ -37,7 +37,7 @@ export function BuyerDetailsForm({
           error={fieldErrors.fullName}
           inputRef={registerInput('fullName')}
         />
-        <CheckoutTextField
+        <TextField
           id="buyer-email"
           label="E-mail para o recibo"
           type="email"

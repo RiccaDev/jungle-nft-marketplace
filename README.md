@@ -2,7 +2,7 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho e cotação (Etapa 6) funcionais, com documentação pendente. **Checkout e pedidos (Etapa 7) funcionais** em `/pagamento` e `/pedidos/:orderId`, testados em `e2e/checkout.spec.ts`; a conferência com os frames do Figma e outras pendências estão em "Checkout e pedidos" no [ARCHITECTURE.md](ARCHITECTURE.md). Perfil completo, cadastro de carteiras e favoritos ainda não foram implementados.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho e cotação (Etapa 6) funcionais, com documentação pendente. **Checkout e pedidos (Etapa 7) funcionais** em `/pagamento` e `/pedidos/:orderId` (`e2e/checkout.spec.ts`). **Perfil, carteiras e histórico de pedidos (Etapa 8) funcionais** em `/perfil`, `/perfil/carteiras` e `/perfil/pedidos` (`e2e/profile.spec.ts`). As telas dessas etapas não foram conferidas com o Figma (MCP indisponível); pendências em "Checkout e pedidos" e "Perfil, carteiras e histórico" no [ARCHITECTURE.md](ARCHITECTURE.md). Favoritos ainda não foram implementados.
 
 ## Credenciais fictícias
 
@@ -21,7 +21,9 @@ Contas existem apenas na API simulada. O código guarda somente hashes com salt;
 | `/nfts/:nftId`  | Detalhe: galeria, informações, edição (`?edition=`), quantidade, descrição e relacionados. |
 | `/entrar`       | Login (modal no desktop, página no mobile). Aceita `?redirect=` para voltar ao destino.   |
 | `/cadastro`     | Cadastro (modal no desktop, página no mobile). Aceita `?redirect=`.                       |
-| `/perfil`       | Privada: resumo da conta do usuário autenticado (perfil completo em etapa futura).        |
+| `/perfil`       | Privada: dados do perfil, avatar e senha.                                                  |
+| `/perfil/carteiras` | Privada: carteiras principal e secundária (cadastro, edição, tornar principal).       |
+| `/perfil/pedidos` | Privada: histórico de pedidos com link para os recibos.                                  |
 | `/carrinho`     | Carrinho: quantidades, remoção, cupom e cotação da API.                                    |
 | `/pagamento`    | Privada: dados do colecionador, carteira e rede, revisão e envio idempotente do pedido.   |
 | `/pedidos/:orderId` | Privada: pedido pendente, confirmado (recibo com transação simulada) ou recusado.     |
@@ -84,6 +86,7 @@ O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em 
 | `e2e/catalog.spec.ts`    | Busca, filtros combinados, faixa de preço, ordenação, paginação, histórico, estado vazio, skeleton/erro/nova tentativa e respostas fora de ordem (desktop); busca e gaveta de filtros (mobile). |
 | `e2e/auth.spec.ts`       | Cadastro (validação, conflitos de usuário/e-mail), login inválido/válido, rota privada com retorno ao destino, refresh, logout, troca de usuário sem vazamento (e novo handshake do socket), sessão expirada durante a navegação e após refresh, 401 sem sessão (desktop); páginas e tab bar (mobile). |
 | `e2e/checkout.spec.ts`   | Compra completa até o recibo confirmado via `order.updated` (snapshot imune a alterações posteriores), novo preço via Socket.IO exigindo aceite, `409 QUOTE_CHANGED` durante o envio, recusa/aprovação/desconexão da carteira, pagamento recusado (carrinho e estoque preservados), timeout após a criação com recuperação do mesmo pedido, clique duplo e reenvios com a mesma chave, refresh e reconexão do socket com pedido pendente, isolamento Ana × Bruno (desktop); login exigido e compra completa (mobile). |
+| `e2e/profile.spec.ts`    | Edição do perfil com conflitos e persistência após F5 (cabeçalho e novo login), sessão expirada ao salvar, avatar (validação no cliente e na API, pré-visualização, persistência, remoção), troca de senha (atual incorreta, confirmação, login só com a nova), cadastro/edição/troca de principal de carteiras com uso no checkout e bloqueio por pedido pendente, histórico com estados/recibos/erro e nova tentativa, isolamento Ana × Bruno com resposta atrasada e 401 atrasado da sessão anterior (desktop); perfil, carteira e pedidos pela tab bar sem overflow (mobile). |
 | `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, ações indisponíveis, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
 
 ## Validando a autenticação no navegador
@@ -211,3 +214,24 @@ Com `npm run dev`, entre como Ana (`ana@kurio.dev` / `kurio-ana-2026`):
 6. **Isolamento:** com um pedido de Ana aberto, saia e entre como Bruno (`bruno@kurio.dev` / `kurio-bruno-2026`). A URL do pedido de Ana mostra "Pedido não encontrado", e o pagamento de Bruno lista apenas a carteira dele.
 
 Os contratos, a política de idempotência e os estados do pedido estão documentados em "Checkout e pedidos" no [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Validando o perfil e as carteiras no navegador
+
+Com `npm run dev`, entre como Ana (`ana@kurio.dev` / `kurio-ana-2026`) e abra **Perfil** (nome no cabeçalho ou ícone da tab bar):
+
+1. **Dados e segurança:** altere o nome de exibição e salve; o nome no cabeçalho muda na hora e persiste após F5. Use `bruno.criador` como usuário ou `bruno@kurio.dev` como e-mail para ver os conflitos. Se trocar o e-mail, ele passa a ser o login.
+2. **Avatar:** escolha um `.txt` (recusado no cliente), um arquivo acima de 512 KB (recusado no cliente) ou um texto renomeado para `.png` (recusado pela API ao salvar). Com uma imagem válida, confira a pré-visualização, salve e recarregue.
+3. **Senha:** tente com a senha atual errada e depois troque de verdade. Saia e confirme que só a nova senha funciona.
+4. **Carteiras** (`/perfil/carteiras`): entre como Bruno (uma carteira), cadastre uma secundária (ex.: `0xAbCdEf0123456789aBcDeF0123456789AbCdEf01`), edite e clique em **Tornar principal**. No pagamento, a nova principal vem selecionada.
+5. **Bloqueio por pedido pendente:** com o cenário `payment: 'manual'` (veja "Validando o checkout"), compre com uma carteira e volte a `/perfil/carteiras`: ela aparece como "Em uso por um pedido pendente" e não pode ser editada até a liquidação.
+6. **Histórico** (`/perfil/pedidos`): pedidos mais recentes primeiro, com status e link **Ver recibo**. Para ver o erro com nova tentativa:
+
+   ```js
+   window.__KURIO_NETWORK_CONDITIONS__ = (request) =>
+     new URL(request.url).pathname === '/api/orders' ? { status: 503 } : undefined
+   // recarregue a aba Pedidos, depois: delete window.__KURIO_NETWORK_CONDITIONS__ e clique em "Tentar novamente"
+   ```
+
+7. **Isolamento:** saia e entre como Bruno: perfil, carteiras e pedidos mostram só os dados dele, e a URL de um recibo da Ana responde "Pedido não encontrado".
+
+Contas novas começam sem carteira: o pagamento mostra um link para cadastrar a primeira (que é sempre a principal).

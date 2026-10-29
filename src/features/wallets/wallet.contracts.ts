@@ -7,13 +7,27 @@ export const PAYMENT_NETWORK_LABELS: Record<PaymentNetworkId, string> = {
   polygon: 'Polygon',
 }
 
+export type WalletRole = 'primary' | 'secondary'
+
 export type Wallet = {
   id: string
   label: string
-  role: 'primary' | 'secondary'
+  role: WalletRole
   address: string
   networks: PaymentNetworkId[]
 }
+
+// Each account has at most one primary and one secondary wallet.
+export const MAX_WALLETS_PER_USER = 2
+
+export type WalletFormValues = {
+  label: string
+  address: string
+  networks: PaymentNetworkId[]
+}
+
+export type CreateWalletRequest = WalletFormValues & { role: WalletRole }
+export type UpdateWalletRequest = WalletFormValues
 
 export type WalletConnection = {
   id: string
@@ -37,6 +51,10 @@ export const WALLET_ERROR_CODES = {
   networkNotSupported: 'NETWORK_NOT_SUPPORTED',
   connectionRejected: 'WALLET_CONNECTION_REJECTED',
   notConnected: 'WALLET_NOT_CONNECTED',
+  limitReached: 'WALLET_LIMIT_REACHED',
+  addressTaken: 'WALLET_ADDRESS_TAKEN',
+  // The wallet pays a pending order: its payment data cannot change until the order settles.
+  inUseByPendingOrder: 'WALLET_IN_USE',
 } as const
 
 // "0x9f3a…c41e": enough to recognise the wallet without exposing the whole address.

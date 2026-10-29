@@ -13,11 +13,11 @@ src/
     nfts/             recurso NFT: contratos, filtros da URL, API, edições, sincronização em tempo real e catálogo
     nft-detail/       página de detalhe: seleção de edição/quantidade, ações e layouts desktop/mobile
     auth/             contratos, validação compartilhada, sessão, telas de login/cadastro e ciclo de vida
-    account/          resumo da conta (primeira página privada)
+    account/          perfil: layout com abas, dados, avatar e senha (contratos e validação compartilhados com o mock)
     realtime-demo/    painel técnico de `/diagnostico`
     checkout/         tela de pagamento: dados do comprador, carteira, cotação aceita e envio idempotente
     orders/           contratos e API de pedidos, comparação de cotações, order.updated e página do pedido
-    wallets/          contratos e API das carteiras e da conexão simulada
+    wallets/          contratos, validação e API das carteiras (cadastro, edição, principal) e da conexão simulada
   components/layout/  cabeçalho, rodapé e tab bar mobile
   components/ui/      componentes shadcn/ui adaptados ao tema
   hooks/              hooks genéricos (debounce, media query)
@@ -133,7 +133,7 @@ O `loader` da rota apenas dispara `prefetchQuery` (sem `await`): a requisição 
 | Transporte             | Header `Authorization: Bearer`, adicionado por um interceptor do Axios a toda requisição.                  |
 | Armazenamento          | `localStorage` (`kurio.session-token`), para recuperar a sessão após refresh. Veja "Limitações de segurança". |
 | Fonte de verdade       | `GET /api/auth/session`, em cache no TanStack Query (`['auth', 'session']`, `staleTime` de 5 min).          |
-| Rejeição da sessão     | Qualquer 401 `SESSION_EXPIRED`/`UNAUTHENTICATED` em requisição que levou token dispara o evento `session rejected` (`lib/http/session-events.ts`). |
+| Rejeição da sessão     | Um 401 `SESSION_EXPIRED`/`UNAUTHENTICATED` em requisição que levou o **token atual** dispara o evento `session rejected` (`lib/http/session-events.ts`); 401 atrasado de um token já substituído é ignorado. |
 
 ### Ciclo de vida
 
@@ -412,11 +412,83 @@ O Figma MCP não estava disponível nesta etapa e não havia metadados salvos do
 ### Pendências desta etapa
 
 - Conferir as telas com os frames do Figma quando o MCP estiver disponível e registrar os desvios reais.
-- Cadastro e edição de carteiras (as fixtures cobrem Ana e Bruno; contas novas recebem uma carteira principal de demonstração derivada do id).
+- ~~Cadastro e edição de carteiras~~ e ~~lista de pedidos no perfil~~: concluídos na Etapa 8.
 - Expiração da sessão durante o checkout: o guard e o ciclo de sessão existentes levam ao login e retornam a `/pagamento`, mas os dados digitados no formulário não são preservados.
-- Lista de pedidos no perfil (a API `GET /api/orders` já existe).
 - Durante um pedido pendente, o carrinho pode exibir a linha como esgotada ou com estoque insuficiente (o estoque já está reservado); não há aviso específico no carrinho.
 - Regressão visual (baselines) do pagamento ainda não foi criada.
+
+## Perfil, carteiras e histórico (Etapa 8)
+
+Rotas privadas sob o layout `routes/_authenticated/perfil.tsx` (resumo da conta, botão "Sair" e abas):
+
+| Rota | Conteúdo |
+| ---- | -------- |
+| `/perfil` | Dados do perfil (nome de exibição, nome de usuário, e-mail), avatar e senha. |
+| `/perfil/carteiras` | Carteiras principal e secundária: listar, cadastrar, editar e tornar principal. |
+| `/perfil/pedidos` | Histórico de pedidos com número, data, quantidade de itens, total, status e link para o recibo. |
+
+Cada página é remontada por `key={userId}`, então uma troca de sessão nunca leva estado de formulário de uma conta para outra.
+
+### Perfil
+
+- **Dados:** `PATCH /api/me/account`. `validateProfile` (`features/account/account-validation.ts`) é usado pelo formulário e pelo handler; e-mail e nome de usuário continuam únicos (sem diferenciar maiúsculas), ignorando o próprio registro. Conflitos voltam como `409 EMAIL_TAKEN`/`USERNAME_TAKEN` com `fieldErrors` e aparecem no campo.
+- **Cabeçalho e sessão:** a resposta da API (nunca o que foi digitado) é gravada no cache da conta e no cache da sessão (`updateSessionUser`), o que atualiza o nome no cabeçalho na hora. O novo e-mail passa a ser o login.
+- **Avatar:** o arquivo é validado no cliente (`validateAvatarFile`: PNG, JPEG ou WebP, até 512 KB) e pré-visualizado a partir do próprio arquivo. "Salvar avatar" envia um data URL (`PUT /api/me/avatar`); a API confere o formato do data URL, o tamanho decodificado e a **assinatura do conteúdo** (bytes iniciais de PNG/JPEG/WebP), então um arquivo declarado como PNG que não é imagem é recusado com `422 AVATAR_INVALID`. `DELETE /api/me/avatar` volta às iniciais. O limite é baixo porque a imagem fica no `localStorage` do mock.
+- **Senha:** `PUT /api/me/password` exige a senha atual (`422 INVALID_CURRENT_PASSWORD`, associado ao campo), aplica as regras de senha do cadastro e recusa senha igual à atual. A confirmação é validada no cliente. A troca gera **novo salt e novo hash** (nada em texto puro) e revoga as outras sessões do usuário, mantendo a atual.
+- **Persistência:** alterações de usuários das fixtures ficam em `fixtureUserChanges` dentro de `kurio-mock:auth:v1` (as fixtures continuam imutáveis); usuários cadastrados são alterados no próprio registro.
+
+### Carteiras
+
+| Regra | Onde |
+| ----- | ---- |
+| Nome de 2 a 30 caracteres; endereço EVM `0x` + 40 hexadecimais; ao menos uma rede entre Ethereum e Polygon | `validateWallet` (cliente e API) |
+| Endereço único entre as carteiras do usuário (sem diferenciar maiúsculas) | API: `409 WALLET_ADDRESS_TAKEN` no campo |
+| No máximo 2 carteiras (uma principal e uma secundária) | API: `409 WALLET_LIMIT_REACHED`; a interface esconde "Adicionar carteira" |
+| Exatamente uma principal | A primeira carteira é sempre principal; cadastrar uma nova como principal ou usar "Tornar principal" rebaixa a anterior na mesma operação |
+| Carteira pagando pedido pendente não pode ser editada | API: `409 WALLET_IN_USE`; a interface desabilita "Editar" e explica o motivo |
+| Editar a carteira conectada no checkout encerra a conexão | API (`updateWallet`); o cliente reconsulta a conexão |
+
+- Todas as mutações respondem com a lista completa (`{ wallets }`), porque mudar a principal altera duas carteiras. A lista vem ordenada com a principal primeiro, e o checkout a pré-seleciona.
+- "Tornar principal" é permitido durante um pedido pendente: muda só a função, não endereço nem redes, e o pedido guarda seu próprio snapshot da carteira.
+- Estado em `kurio-mock:wallets:v1`. Ana e Bruno começam com as carteiras das fixtures; **contas novas começam sem carteira** (a carteira de demonstração da Etapa 7 foi removida) e o checkout mostra um link para cadastrar.
+- Não há exclusão de carteira nesta etapa.
+
+### Histórico de pedidos
+
+Reaproveita `GET /api/orders` (`ordersQueryOptions(userId, 'all')`, chave `['private', userId, 'orders', 'list', 'all']`), que já é invalidada pelo `order.updated` e na reconexão. Mostra skeleton, estado vazio, erro com "Tentar novamente" (após as tentativas automáticas) e status com texto e ícone. O recibo (`/pedidos/:orderId`) ganhou na trilha o link "Meus pedidos".
+
+### Isolamento e respostas atrasadas
+
+- Perfil, carteiras, conexão e pedidos ficam sob `['private', userId, …]`, removidos a cada troca de sessão. A API só lê e altera registros do usuário do token (carteira de outra conta responde `404`).
+- **Mutations atrasadas:** cada mutation captura o `userId` ao começar; `isCurrentSessionUser` descarta a resposta se a sessão mudou antes de ela chegar, então nada é escrito em cache algum.
+- **401 atrasado:** o interceptor do Axios só trata um 401 como "sessão rejeitada" se o token enviado for o token atual. Antes, uma requisição da sessão anterior que voltasse 401 depois da troca de usuário (o logout revoga o token) encerraria a sessão nova.
+
+### Contratos REST (perfil e carteiras)
+
+| Método | Caminho | Resposta |
+| ------ | ------- | -------- |
+| GET    | `/api/me/account` | 200 `AccountResponse` (agora com `avatarUrl: string \| null`) · 401 |
+| PATCH  | `/api/me/account` `{ displayName, username, email }` | 200 `AccountResponse` · 422 `VALIDATION_FAILED` · 409 `EMAIL_TAKEN`/`USERNAME_TAKEN` (com `fieldErrors`) · 401 |
+| PUT    | `/api/me/avatar` `{ dataUrl }` | 200 `AccountResponse` · 422 `AVATAR_INVALID` · 401 |
+| DELETE | `/api/me/avatar` | 200 `AccountResponse` · 401 |
+| PUT    | `/api/me/password` `{ currentPassword, newPassword }` | 204 · 422 `VALIDATION_FAILED`/`INVALID_CURRENT_PASSWORD` (com `fieldErrors`) · 401 |
+| POST   | `/api/me/wallets` `{ label, address, networks, role }` | 201 `{ wallets }` · 422 · 409 `WALLET_ADDRESS_TAKEN`/`WALLET_LIMIT_REACHED` · 401 |
+| PATCH  | `/api/me/wallets/:walletId` `{ label, address, networks }` | 200 `{ wallets }` · 404 · 422 · 409 `WALLET_ADDRESS_TAKEN`/`WALLET_IN_USE` · 401 |
+| POST   | `/api/me/wallets/:walletId/make-primary` | 200 `{ wallets }` · 404 · 401 |
+
+`PATCH /api/me/wallets/:walletId` também aceita `delayAfterCommitMs` nas condições de rede (usado no teste de resposta atrasada).
+
+### Figma
+
+O Figma MCP não estava disponível e não há metadados salvos dos frames de perfil (9:1238) e carteiras (9:1670). As telas usam os tokens, a tipografia e os padrões de seção do carrinho e do checkout; **não há conferência de fidelidade com esses frames**. Decisões próprias: abas no topo do perfil (rolam na horizontal no mobile), cartões de carteira em duas colunas no desktop, formulário de carteira inline e histórico em linhas que viram cartões no mobile.
+
+### Pendências desta etapa
+
+- Conferir perfil e carteiras com os frames do Figma.
+- Exclusão de carteira e troca de função para "secundária" sem promover outra.
+- Recorte/redimensionamento do avatar (hoje a imagem é enviada como escolhida, até 512 KB).
+- Paginação do histórico de pedidos (lista completa).
+- Expiração de sessão durante o checkout continua sem preservar o formulário (pendência da Etapa 7).
 
 ## Política de cache e retries
 
@@ -589,6 +661,6 @@ Pendente:
 
 - A sessão não é renovada automaticamente: ao fim dos 30 minutos o usuário precisa entrar novamente.
 - O reset dos mocks (`POST /api/__mocks__/reset`) apaga o estado persistido; o estado em memória só é reconstruído na próxima recarga da página.
-- Favoritos, perfil completo e cadastro de carteiras continuam indisponíveis; `/perfil` mostra apenas o resumo da conta.
+- Favoritos continuam indisponíveis.
 - A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
 - As condições de rede (`__KURIO_NETWORK_CONDITIONS__`) cobrem NFTs, carrinho, carteiras e pedidos, mas não a autenticação.

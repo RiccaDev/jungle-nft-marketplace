@@ -1,10 +1,10 @@
 import { cn } from 'cn'
 import type { Ref } from 'react'
 
-type CheckoutTextFieldProps = {
+type TextFieldProps = {
   id: string
   label: string
-  type: 'text' | 'email'
+  type: 'text' | 'email' | 'password'
   value: string
   onChange: (value: string) => void
   autoComplete: string
@@ -13,7 +13,8 @@ type CheckoutTextFieldProps = {
   inputRef?: Ref<HTMLInputElement>
 }
 
-export function CheckoutTextField({
+// Form field with a visible label and its error associated through aria-describedby.
+export function TextField({
   id,
   label,
   type,
@@ -23,7 +24,7 @@ export function CheckoutTextField({
   error,
   disabled,
   inputRef,
-}: CheckoutTextFieldProps) {
+}: TextFieldProps) {
   const errorId = `${id}-error`
 
   return (
