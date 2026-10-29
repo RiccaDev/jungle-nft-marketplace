@@ -12,6 +12,8 @@ src/
     home/             composição da Home (hero, promoções, blog) e conteúdo editorial estático
     nfts/             recurso NFT: contratos, filtros da URL, API, edições, sincronização em tempo real e catálogo
     nft-detail/       página de detalhe: seleção de edição/quantidade, ações e layouts desktop/mobile
+    auth/             contratos, validação compartilhada, sessão, telas de login/cadastro e ciclo de vida
+    account/          resumo da conta (primeira página privada)
     realtime-demo/    painel técnico de `/diagnostico`
   components/layout/  cabeçalho, rodapé e tab bar mobile
   components/ui/      componentes shadcn/ui adaptados ao tema
@@ -21,6 +23,7 @@ src/
   lib/realtime/       cliente socket.io-client, contrato dos eventos e hook de conexão
   lib/search-params/  (de)serialização da URL e parsers tolerantes de parâmetros
   mocks/
+    auth/             hash de senha e resolução da sessão de uma requisição
     catalog/          consulta do catálogo (busca, filtros, facetas, ordenação, paginação)
     fixtures/         dados determinísticos
     handlers/         handlers REST do MSW, por recurso, e endpoints de controle dos mocks
@@ -116,6 +119,69 @@ O Figma repete a mesma imagem nas 4 miniaturas. Para não exibir artes que não 
 
 O `loader` da rota apenas dispara `prefetchQuery` (sem `await`): a requisição começa ao passar o mouse sobre um card (`defaultPreload: 'intent'`) e a página continua exibindo o skeleton enquanto ela não termina.
 
+## Autenticação e sessão
+
+### Política de sessão
+
+| Aspecto                | Decisão                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| Credencial             | Token opaco (UUID) emitido no login/cadastro, válido por 30 minutos (`expiresAt`).                          |
+| Transporte             | Header `Authorization: Bearer`, adicionado por um interceptor do Axios a toda requisição.                  |
+| Armazenamento          | `localStorage` (`kurio.session-token`), para recuperar a sessão após refresh. Veja "Limitações de segurança". |
+| Fonte de verdade       | `GET /api/auth/session`, em cache no TanStack Query (`['auth', 'session']`, `staleTime` de 5 min).          |
+| Rejeição da sessão     | Qualquer 401 `SESSION_EXPIRED`/`UNAUTHENTICATED` em requisição que levou token dispara o evento `session rejected` (`lib/http/session-events.ts`). |
+
+### Ciclo de vida
+
+- **Login/cadastro** (`startSession`): cancela consultas privadas em andamento, remove o cache privado, grava o token, preenche o cache da sessão e refaz o handshake do socket. O formulário então navega para `?redirect=` (ou `/`).
+- **Logout** (`endSession`): chama `POST /api/auth/logout` (falha de rede não impede o encerramento local), cancela e remove o cache privado, apaga o token, zera a sessão, refaz o handshake do socket e volta para `/`.
+- **Expiração/revogação** (`useSessionLifecycle`, montado na raiz): ao receber `session rejected`, executa `endSession` e:
+  - em rota privada, navega para `/entrar?redirect=<rota atual>&reason=session-expired`;
+  - em rota pública, mantém a página, revalida os guards e mostra um aviso com link para entrar.
+- **Refresh com token expirado:** o guard detecta que havia um token salvo e que a sessão não é mais válida, e redireciona com `reason=session-expired` para explicar o motivo.
+
+### Cache privado e isolamento
+
+Toda consulta de dados do usuário usa a chave `['private', userId, …]` (`privateQueryKeys`). Isso garante isolamento em duas camadas: o `userId` separa os caches de dois usuários, e o prefixo `['private']` é cancelado e removido a cada troca de identidade. As consultas são canceladas **antes** de trocar o token, então uma resposta atrasada do usuário anterior nunca entra no cache do próximo.
+
+### Rotas protegidas
+
+Rotas privadas ficam sob o layout sem caminho `routes/_authenticated.tsx`. O `beforeLoad` garante a sessão (`ensureQueryData`) e, sem ela, lança `redirect` para `/entrar?redirect=<href original>`. Ele também injeta `sessionUser` no contexto da rota. `/entrar` e `/cadastro` redirecionam ao destino quando já há sessão. O parâmetro `redirect` só aceita caminhos internos (`/…`, sem `//`), o que impede open redirect.
+
+### Socket.IO e sessão
+
+O `socket.io-client` envia `{ token }` no pacote CONNECT (`auth` como função, lida a cada handshake). Toda troca de sessão chama `reconnectWithCurrentSession()`, e o novo handshake descarta as assinaturas da identidade anterior no servidor. O servidor simulado associa cada conexão ao `userId` do token e expõe `emitToUser(userId, …)` para eventos privados futuros (`order.updated`); eventos públicos (`nft.updated`) continuam indo para todos.
+
+### Pontos de integração preparados
+
+| Necessidade futura          | Ponto                                                                                         |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| Páginas privadas (perfil, carteiras, checkout, favoritos) | Criar a rota sob `routes/_authenticated/`.                     |
+| Ações que exigem conta      | `useRequireAuthentication()` → `{ isAuthenticated, redirectToLogin() }`, que preserva a página atual. |
+| Dados do usuário            | `privateQueryKeys.user(userId)` como prefixo da chave.                                        |
+| Eventos em tempo real privados | `emitToUser` no mock; o cliente já reconecta a cada troca de sessão.                      |
+| Endpoints privados no mock  | `resolveRequestSession(request)` devolve o usuário ou a resposta 401 adequada.               |
+
+### Validação
+
+`features/auth/auth-validation.ts` é usado pelos formulários e pelos handlers do MSW, então cliente e API rejeitam a mesma entrada:
+
+| Campo             | Regra                                                         |
+| ----------------- | ------------------------------------------------------------- |
+| Nome de usuário   | Obrigatório; 3 a 20 letras, números, ponto ou sublinhado; único (sem diferenciar maiúsculas). |
+| E-mail            | Obrigatório; formato válido; único (normalizado em minúsculas). |
+| Senha (cadastro)  | Obrigatória; mínimo de 8 caracteres, com letras e números.    |
+| Confirmação       | Igual à senha (apenas no cliente).                            |
+
+Os formulários validam no envio e, a partir daí, enquanto o usuário corrige; focam o primeiro campo inválido; associam cada erro ao campo (`aria-invalid` e `aria-describedby`); e mapeiam os `fieldErrors` da API (422/409). Credenciais inválidas geram uma mensagem única ("E-mail ou senha incorretos."), sem revelar se o e-mail existe.
+
+### Limitações de segurança do ambiente simulado
+
+- O token fica no `localStorage`, acessível a JavaScript (risco em caso de XSS). Em produção, a sessão deveria usar cookie `httpOnly`, `Secure` e `SameSite`, que o MSW não consegue emitir de verdade.
+- O mock guarda senhas como SHA-256 com salt por usuário. Isso evita senhas em texto puro, mas não substitui um hash lento e com custo de memória (Argon2/bcrypt) no servidor.
+- Usuários cadastrados e sessões do mock ficam no `localStorage` do navegador (`kurio-mock:auth:v1`), visíveis para quem tiver acesso ao dispositivo. Use apenas dados fictícios.
+- Não há limite de tentativas de login, recuperação de senha nem login social (os botões aparecem indisponíveis).
+
 ## Valores em ETH
 
 Preços trafegam como strings decimais. Comparações e ordenação usam `BigInt` em wei (18 casas) via `lib/eth/eth-amount.ts`, sem `number` de ponto flutuante. O slider de preço trabalha com inteiros em centésimos de ETH, convertidos de/para string sem perda.
@@ -128,7 +194,13 @@ Preços trafegam como strings decimais. Comparações e ordenação usam `BigInt
 | GET    | `/api/nfts/featured`          | 200 `NftSummary` · 404 `ApiErrorBody`                                         |
 | GET    | `/api/nfts/:nftId`            | 200 `NftDetail` · 404 `ApiErrorBody` (`NFT_NOT_FOUND`)                        |
 | GET    | `/api/nfts/:nftId/related`    | 200 `NftSummary[]` (até 5 da mesma coleção, mais recentes) · 404              |
+| POST   | `/api/auth/register`          | 201 `AuthSession` · 422 `VALIDATION_FAILED` · 409 `EMAIL_TAKEN`/`USERNAME_TAKEN` (com `fieldErrors`) |
+| POST   | `/api/auth/login`             | 200 `AuthSession` · 422 `VALIDATION_FAILED` · 401 `INVALID_CREDENTIALS`       |
+| GET    | `/api/auth/session`           | 200 `SessionResponse` · 401 `SESSION_EXPIRED`/`UNAUTHENTICATED`               |
+| POST   | `/api/auth/logout`            | 204 (idempotente, mesmo com token inválido)                                   |
+| GET    | `/api/me/account`             | 200 `AccountResponse` · 401 `SESSION_EXPIRED`/`UNAUTHENTICATED`               |
 | GET    | `/api/health`                 | 200 `{ status: 'ok', timestamp: string /* ISO */ }`                           |
+| POST   | `/api/__mocks__/auth/expire-session` | 202 · 404 (controle dos mocks; expira a sessão do Bearer enviado)      |
 | POST   | `/api/__mocks__/nfts/:nftId/market-change` | 202 sem corpo · 404 (controle dos mocks)                         |
 | POST   | `/api/__mocks__/nfts/:nftId/events/:version/replay` | 202 sem corpo · 404 (controle dos mocks)                |
 
@@ -175,7 +247,14 @@ type NftDetail = NftSummary & {
   gallery: { id: string; label: string; zoom: number; focusX: number; focusY: number }[]
 }
 
-type ApiErrorBody = { error: { code: string; message: string } }
+type AuthUser = { id: string; username: string; email: string; displayName: string }
+type AuthSession = { token: string; expiresAt: string /* ISO */; user: AuthUser }
+type SessionResponse = { expiresAt: string; user: AuthUser }
+type AccountResponse = AuthUser & { memberSince: string }
+
+type ApiErrorBody = {
+  error: { code: string; message: string; fieldErrors?: Record<string, string> }
+}
 ```
 
 - `GET /api/nfts` aceita os parâmetros da tabela "Estado na URL" mais `pageSize` (padrão 9, máximo 48).
@@ -219,6 +298,11 @@ Chaves de query: `['nfts', 'list', NftListRequest]` (com padrões aplicados, par
 - As URLs da API (`src/lib/http/config.ts`) e do servidor Socket.IO (`src/lib/realtime/config.ts`) são compartilhadas entre o código da aplicação e os mocks, para nunca divergirem.
 - **Ordem de inicialização:** `src/main.tsx` importa a aplicação dinamicamente **depois** de `worker.start()`. O `engine.io-client` guarda `globalThis.WebSocket` quando o módulo é avaliado; se a aplicação fosse importada estaticamente, o cliente guardaria o WebSocket nativo antes de o MSW substituí-lo, e a conexão iria para a rede real (o `vite preview` responde 200 com HTML e o handshake falha).
 - **Fonte única de dados:** o estado vive em memória em `src/mocks/state/nft-catalog.state.ts` e é reiniciado a cada recarga da página. `GET /api/nfts`, `/featured`, `/:id`, `/:id/related` e os eventos `nft.updated` leem e publicam a partir dos mesmos registros; uma alteração de mercado substitui o registro (com `version + 1`) e o evento é montado a partir dele.
+
+### Usuários e sessões
+
+- `src/mocks/fixtures/user.fixtures.ts` define 2 usuários fictícios (Ana e Bruno) com `passwordSalt` e `passwordHash` (SHA-256 de `salt:senha`); nenhuma senha em claro fica no código.
+- `src/mocks/state/auth.state.ts` guarda usuários cadastrados e sessões e os persiste no `localStorage` (`kurio-mock:auth:v1`), para que a sessão sobreviva ao refresh. Cada teste do Playwright começa com um contexto de navegador limpo.
 
 ### Fixtures do catálogo
 
@@ -317,6 +401,19 @@ O hero desktop e o mobile (e os layouts do detalhe) são escolhidos com `useMedi
 | Pontos do carrossel de relacionados     | Três pontos                                                     | Omitidos: os relacionados são uma grade, não um carrossel.                                                 |
 | Cards relacionados                      | 219 × 255 px, nome 15 px e preço 16 px                          | Reutilizam o card do catálogo (mesma proporção, nome 16 px e preço 18 px).                                 |
 
+#### Login e cadastro
+
+| Ponto                                   | Figma                                                         | Implementação e motivo                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Fundo do modal (desktop)                | Página do marketplace sob um scrim                              | Hero da Home (inerte, `aria-hidden`) sob o overlay do `Dialog`, com cabeçalho e rodapé reais.             |
+| Rótulos dos campos                      | Somente placeholders                                           | Placeholders mantidos, com `<label>` visualmente oculto e mensagens de erro associadas ao campo.          |
+| Placeholder do e-mail no login          | "contato@email.com"                                            | "E-mail" (o valor de exemplo parecia um campo preenchido).                                                 |
+| Mostrar/ocultar senha                   | Só o ícone de olho riscado, sem estado alternativo               | Botão funcional; o estado "visível" usa o ícone `Eye` do Lucide na mesma cor.                             |
+| Mensagens de erro                       | Não desenhadas                                                 | Abaixo de cada campo, na cor `Text/Coral` do Figma, com borda do campo na mesma cor.                      |
+| "Esqueceu a senha?" e login social      | Ativos                                                          | Indisponíveis (`aria-disabled`, motivo descrito): não fazem parte do escopo.                               |
+| Cabeçalho com sessão                    | Não desenhado                                                  | Nome do usuário (link para o perfil) e botão "Sair" com o mesmo ícone de logout do Figma.                 |
+| Ícone de perfil da tab bar              | Sem ação definida                                              | Leva a `/perfil` (ou ao login, preservando o destino).                                                    |
+
 ### Ações fora do escopo atual
 
 Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucesso: "Criadores", "Aprenda", carrinho, "Entrar", links de perfil e ajuda do rodapé, "Ler mais" do blog e os itens da tab bar mobile (exceto Início) têm `aria-disabled="true"` e o título "Disponível em breve". A newsletter informa que a inscrição não está disponível nesta demonstração. "Mercado", as promoções e as coleções do rodapé levam ao catálogo com o filtro correspondente. No detalhe, comprar, adicionar ao carrinho e favoritar seguem o mesmo princípio (veja "Ações de compra e favoritos"); os links de compartilhamento abrem os serviços reais em nova aba.
@@ -334,6 +431,7 @@ No fluxo Mercado (`/nfts/*`), o cabeçalho segue o componente do Figma para tela
 - **Evidência de tráfego Socket.IO nos testes:** como o WebSocket é mockado dentro da página, o Playwright não o enxerga como tráfego de rede. Por isso, `e2e/realtime.spec.ts` comprova o caminho de três formas: o endpoint de controle não devolve dados; o frame `42["nft.updated",…]` aparece exatamente uma vez no log do MSW; e, com o socket desconectado, a interface não muda.
 - **Página de diagnóstico:** a página provisória da Etapa 2 (status da API e demonstração de tempo real) foi movida de `/` para `/diagnostico`, preservando seus testes. Desde a Etapa 4 ela usa o NFT em destaque do catálogo, e não mais um NFT de demonstração com estado próprio.
 - **Testes que aguardam o socket:** antes de disparar uma alteração, os testes esperam o frame de conexão do Socket.IO (`⬆ 40`) no log do MSW; um evento emitido antes da conexão seria perdido (e corretamente reconciliado apenas na próxima reconexão).
+- **Requisições disparadas pelos testes:** `fetch` executado logo após o `goto` pode sair antes de o Service Worker do MSW controlar a página e chegar ao servidor de preview. Os testes esperam um elemento da aplicação (que só renderiza depois de os mocks iniciarem) antes de chamar endpoints diretamente.
 - **Clique em ações indisponíveis nos testes:** o Playwright trata `aria-disabled="true"` como não acionável; os testes usam `click({ force: true })` para provar que o clique real não tem efeito.
 
 ## Limitações conhecidas
@@ -341,4 +439,7 @@ No fluxo Mercado (`/nfts/*`), o cabeçalho segue o componente do Figma para tela
 - O carrinho ainda não existe, então `nft.updated` atualiza catálogo, detalhe, relacionados e destaque, mas ainda não um resumo de carrinho.
 - O estado dos mocks ainda não persiste entre recargas, e ainda não há seleção nem reset de cenários. As condições de rede cobrem apenas os endpoints de NFTs.
 - A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
-- `order.updated` e o isolamento de eventos por sessão de usuário ainda não foram implementados; dependem dos fluxos de pedido e autenticação.
+- `order.updated` ainda não existe; o canal privado por usuário (`emitToUser`) e o novo handshake a cada troca de sessão já estão prontos para ele.
+- Favoritos, carrinho, checkout, carteiras e edição de perfil continuam indisponíveis; `/perfil` mostra apenas o resumo da conta.
+- A sessão não é renovada automaticamente: ao fim dos 30 minutos o usuário precisa entrar novamente.
+- O estado do catálogo continua em memória (reinicia no refresh), enquanto usuários e sessões persistem; o reset completo de cenários ainda não existe.

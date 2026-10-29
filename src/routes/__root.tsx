@@ -4,8 +4,10 @@ import type { RouterContext } from '@/app/router'
 import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { SiteFooter } from '@/components/layout/site-footer'
 import { SiteHeader } from '@/components/layout/site-header'
-import { useIsMarketRoute } from '@/components/layout/use-is-market-route'
+import { useIsAuthRoute, useIsMarketRoute } from '@/components/layout/use-is-market-route'
 import { Button } from '@/components/ui/button'
+import { SessionExpiredBanner } from '@/features/auth/components/session-expired-banner'
+import { useSessionLifecycle } from '@/features/auth/use-session-lifecycle'
 import { useNftRealtimeSync } from '@/features/nfts/use-nft-realtime-sync'
 import { useRealtimeConnection } from '@/lib/realtime/use-socket-connection'
 
@@ -17,7 +19,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function RootLayout() {
   useRealtimeConnection()
   useNftRealtimeSync()
+  const { hasExpiredSessionNotice, dismissExpiredSessionNotice } = useSessionLifecycle()
   const isMarketRoute = useIsMarketRoute()
+  const isAuthRoute = useIsAuthRoute()
 
   return (
     <>
@@ -28,6 +32,9 @@ function RootLayout() {
         Pular para o conteúdo
       </a>
       <SiteHeader />
+      {hasExpiredSessionNotice && !isAuthRoute && (
+        <SessionExpiredBanner onDismiss={dismissExpiredSessionNotice} />
+      )}
       <main id="conteudo" className={cn('md:pb-0', isMarketRoute ? 'pb-[200px]' : 'pb-[150px]')}>
         <Outlet />
       </main>

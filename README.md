@@ -2,7 +2,16 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo e detalhe do NFT concluídos. Carrinho, checkout e conta ainda não foram implementados: os botões de compra e favoritos aparecem indisponíveis.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho, checkout, perfil completo, carteiras e favoritos ainda não foram implementados: essas ações aparecem indisponíveis.
+
+## Credenciais fictícias
+
+| Usuário                        | E-mail            | Senha              |
+| ------------------------------ | ----------------- | ------------------ |
+| Ana Ribeiro (`ana.colecionadora`) | `ana@kurio.dev`   | `kurio-ana-2026`   |
+| Bruno Tavares (`bruno.criador`)   | `bruno@kurio.dev` | `kurio-bruno-2026` |
+
+Contas existem apenas na API simulada. O código guarda somente hashes com salt; as senhas acima existem só para testes. Novas contas criadas pelo cadastro e as sessões ficam no `localStorage` do navegador (chave `kurio-mock:auth:v1`); apague-a para voltar ao estado inicial.
 
 ## Rotas
 
@@ -10,6 +19,9 @@ Implementação do desafio Frontend da Jungle Gaming. O enunciado original está
 | --------------- | ----------------------------------------------------------------------------------------- |
 | `/`             | Home: hero, catálogo com busca, filtros, ordenação e paginação, destaques, blog e rodapé. |
 | `/nfts/:nftId`  | Detalhe: galeria, informações, edição (`?edition=`), quantidade, descrição e relacionados. |
+| `/entrar`       | Login (modal no desktop, página no mobile). Aceita `?redirect=` para voltar ao destino.   |
+| `/cadastro`     | Cadastro (modal no desktop, página no mobile). Aceita `?redirect=`.                       |
+| `/perfil`       | Privada: resumo da conta do usuário autenticado (perfil completo em etapa futura).        |
 | `/diagnostico`  | Página técnica: status da API (`/api/health`) e demonstração de tempo real.               |
 
 ## Requisitos
@@ -67,7 +79,25 @@ O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em 
 | `e2e/smoke.spec.ts`      | `GET /api/health` via MSW e página de rota inexistente.                                        |
 | `e2e/realtime.spec.ts`   | `nft.updated` entregue pelo `socket.io-client` e reconciliação via REST após reconexão.         |
 | `e2e/catalog.spec.ts`    | Busca, filtros combinados, faixa de preço, ordenação, paginação, histórico, estado vazio, skeleton/erro/nova tentativa e respostas fora de ordem (desktop); busca e gaveta de filtros (mobile). |
+| `e2e/auth.spec.ts`       | Cadastro (validação, conflitos de usuário/e-mail), login inválido/válido, rota privada com retorno ao destino, refresh, logout, troca de usuário sem vazamento (e novo handshake do socket), sessão expirada durante a navegação e após refresh, 401 sem sessão (desktop); páginas e tab bar (mobile). |
 | `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, ações indisponíveis, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
+
+## Validando a autenticação no navegador
+
+Com `npm run dev`:
+
+1. **Login:** clique em "Entrar" no cabeçalho (desktop) ou no ícone de perfil da tab bar (mobile) e use uma das credenciais acima. Ao fechar o modal, você volta para a página de origem.
+2. **Rota privada:** acesse `/perfil` sem sessão: você é levado a `/entrar?redirect=%2Fperfil` e, após o login, volta ao perfil.
+3. **Cadastro:** em `/cadastro`, envie o formulário vazio, use `ana.colecionadora` ou `ana@kurio.dev` (conflito) e depois dados novos.
+4. **Refresh e logout:** recarregue a página com a sessão ativa (ela é recuperada); clique em "Sair" para encerrá-la.
+5. **Sessão expirada:** com a sessão ativa, rode no console e navegue para `/perfil` (ou recarregue a página):
+
+   ```js
+   await fetch('/api/__mocks__/auth/expire-session', {
+     method: 'POST',
+     headers: { Authorization: `Bearer ${localStorage.getItem('kurio.session-token')}` },
+   })
+   ```
 
 ## Validando o detalhe do NFT no navegador
 

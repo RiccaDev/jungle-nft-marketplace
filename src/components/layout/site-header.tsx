@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { cn } from 'cn'
 import cartIcon from '@/assets/figma/header/cart.svg'
-import logoutIcon from '@/assets/figma/header/logout.svg'
+import { HeaderAccount } from './header-account'
 import { HeaderSearch } from './header-search'
 import { useIsMarketRoute } from './use-is-market-route'
 
@@ -71,15 +71,7 @@ export function SiteHeader() {
           >
             <img src={cartIcon} alt="" width={24} height={24} />
           </button>
-          <button
-            type="button"
-            aria-disabled="true"
-            title={COMING_SOON_LABEL}
-            className="flex h-[35px] w-[100px] items-center justify-center gap-1 rounded-md bg-primary text-base font-medium text-ink"
-          >
-            <img src={logoutIcon} alt="" width={20} height={20} />
-            Entrar
-          </button>
+          <HeaderAccount />
         </div>
       </div>
       {!isMarketRoute && <div aria-hidden="true" className="h-px bg-primary/40" />}

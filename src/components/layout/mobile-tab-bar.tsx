@@ -10,7 +10,7 @@ import shopIcon from '@/assets/figma/mobile/shop.svg'
 import tabBarBackground from '@/assets/figma/mobile/tab-bar-background.svg'
 import tabBarCenter from '@/assets/figma/mobile/tab-bar-center.svg'
 import userIcon from '@/assets/figma/mobile/user.svg'
-import { useIsMarketRoute } from './use-is-market-route'
+import { useIsAuthRoute, useIsMarketRoute } from './use-is-market-route'
 
 const COMING_SOON_LABEL = 'disponível em breve'
 
@@ -39,7 +39,8 @@ function UnavailableTab({ label, icon, className }: { label: string; icon: strin
 export function MobileTabBar() {
   // Market screens replace the tab bar with their own bottom action bar.
   const isMarketRoute = useIsMarketRoute()
-  if (isMarketRoute) return null
+  const isAuthRoute = useIsAuthRoute()
+  if (isMarketRoute || isAuthRoute) return null
 
   return (
     <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-40 md:hidden">
@@ -75,7 +76,9 @@ export function MobileTabBar() {
         </button>
 
         <UnavailableTab label="Carrinho" icon={shopIcon} className="left-[70.53%]" />
-        <UnavailableTab label="Perfil" icon={userIcon} className="left-[85.51%]" />
+        <Link to="/perfil" aria-label="Perfil" className="absolute top-[71px] left-[85.51%] grid size-5 place-items-center">
+          <img src={userIcon} alt="" width={20} height={20} />
+        </Link>
       </div>
     </nav>
   )

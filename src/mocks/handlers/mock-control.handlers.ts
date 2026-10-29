@@ -1,7 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import type { ApiErrorBody } from '@/lib/http/api-error'
 import { apiUrl } from '@/lib/http/config'
+import { readBearerToken } from '../auth/request-session'
 import { publishNftUpdate, replayNftUpdate } from '../realtime/nft-update-events'
+import { expireSession } from '../state/auth.state'
 import { applyNextMarketChange } from '../state/nft-catalog.state'
 
 // Mock-only endpoints that drive simulated server-side changes; they never return the new
@@ -32,4 +34,16 @@ export const mockControlHandlers = [
       return new HttpResponse(null, { status: 202 })
     },
   ),
+
+  // Expires the session identified by the Bearer token, simulating its TTL running out.
+  http.post(apiUrl('/__mocks__/auth/expire-session'), ({ request }) => {
+    const token = readBearerToken(request)
+    if (!token || !expireSession(token)) {
+      return HttpResponse.json<ApiErrorBody>(
+        { error: { code: 'SESSION_NOT_FOUND', message: 'Sessão não encontrada.' } },
+        { status: 404 },
+      )
+    }
+    return new HttpResponse(null, { status: 202 })
+  }),
 ]

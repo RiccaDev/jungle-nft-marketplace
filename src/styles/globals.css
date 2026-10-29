@@ -17,6 +17,7 @@
   --gm-text-primary: #f7f3ec;
   --gm-text-secondary: #cfb28c;
   --gm-text-accent: #e89b55;
+  --gm-text-coral: #f0805f;
   --gm-foreground: #f5f1eb;
   --gm-gray-light: #ededed;
   --gm-background-elevated: #fbfbfb;
@@ -60,6 +61,7 @@
   --color-text-primary: var(--gm-text-primary);
   --color-text-secondary: var(--gm-text-secondary);
   --color-text-accent: var(--gm-text-accent);
+  --color-text-coral: var(--gm-text-coral);
   --color-gray-light: var(--gm-gray-light);
   --color-background-elevated: var(--gm-background-elevated);
 
