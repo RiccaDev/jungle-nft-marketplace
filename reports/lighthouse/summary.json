@@ -1,0 +1,256 @@
+{
+  "generatedAt": "2026-10-30T04:52:13.314Z",
+  "lighthouseVersion": "13.5.0",
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "baseUrl": "http://localhost:4174",
+  "results": [
+    {
+      "page": "home",
+      "formFactor": "mobile",
+      "runs": [
+        {
+          "scores": {
+            "performance": 77,
+            "accessibility": 100,
+            "best-practices": 96,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4560.263999999999,
+            "cls": 0.01763762017022976,
+            "tbtMs": 100.69599999999991,
+            "fcpMs": 3064.8279999999995
+          }
+        },
+        {
+          "scores": {
+            "performance": 79,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4430.5291499999985,
+            "cls": 0.01763762017022976,
+            "tbtMs": 46.999999999999886,
+            "fcpMs": 3032.378924999999
+          }
+        },
+        {
+          "scores": {
+            "performance": 79,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4424.488699999999,
+            "cls": 0.01763762017022976,
+            "tbtMs": 42.5,
+            "fcpMs": 3028.7986499999997
+          }
+        }
+      ],
+      "median": {
+        "scores": {
+          "performance": 79,
+          "accessibility": 100,
+          "best-practices": 100,
+          "seo": 100
+        },
+        "metrics": {
+          "lcpMs": 4430.5291499999985,
+          "cls": 0.01763762017022976,
+          "tbtMs": 46.999999999999886,
+          "fcpMs": 3032.378924999999
+        }
+      }
+    },
+    {
+      "page": "home",
+      "formFactor": "desktop",
+      "runs": [
+        {
+          "scores": {
+            "performance": 96,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1318.9782000000002,
+            "cls": 0.001563290133015657,
+            "tbtMs": 0,
+            "fcpMs": 881.7089000000001
+          }
+        },
+        {
+          "scores": {
+            "performance": 96,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1320.2467500000002,
+            "cls": 0.001563290133015657,
+            "tbtMs": 0,
+            "fcpMs": 882.4841250000002
+          }
+        },
+        {
+          "scores": {
+            "performance": 93,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1502.5379499999997,
+            "cls": 0.001563290133015657,
+            "tbtMs": 0,
+            "fcpMs": 989.1065249999998
+          }
+        }
+      ],
+      "median": {
+        "scores": {
+          "performance": 96,
+          "accessibility": 100,
+          "best-practices": 100,
+          "seo": 100
+        },
+        "metrics": {
+          "lcpMs": 1320.2467500000002,
+          "cls": 0.001563290133015657,
+          "tbtMs": 0,
+          "fcpMs": 882.4841250000002
+        }
+      }
+    },
+    {
+      "page": "nft-detail",
+      "formFactor": "mobile",
+      "runs": [
+        {
+          "scores": {
+            "performance": 78,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4615.348999999998,
+            "cls": 0,
+            "tbtMs": 14,
+            "fcpMs": 3025.216949999999
+          }
+        },
+        {
+          "scores": {
+            "performance": 78,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4620.439500000001,
+            "cls": 0,
+            "tbtMs": 13,
+            "fcpMs": 3027.4917250000008
+          }
+        },
+        {
+          "scores": {
+            "performance": 78,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 4633.794000000001,
+            "cls": 0,
+            "tbtMs": 15,
+            "fcpMs": 3034.6617000000006
+          }
+        }
+      ],
+      "median": {
+        "scores": {
+          "performance": 78,
+          "accessibility": 100,
+          "best-practices": 100,
+          "seo": 100
+        },
+        "metrics": {
+          "lcpMs": 4620.439500000001,
+          "cls": 0,
+          "tbtMs": 14,
+          "fcpMs": 3027.4917250000008
+        }
+      }
+    },
+    {
+      "page": "nft-detail",
+      "formFactor": "desktop",
+      "runs": [
+        {
+          "scores": {
+            "performance": 95,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1368.5575000000003,
+            "cls": 0.0001419627196222269,
+            "tbtMs": 0,
+            "fcpMs": 876.9066250000002
+          }
+        },
+        {
+          "scores": {
+            "performance": 95,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1351.239,
+            "cls": 0.0001419627196222269,
+            "tbtMs": 0,
+            "fcpMs": 867.70645
+          }
+        },
+        {
+          "scores": {
+            "performance": 95,
+            "accessibility": 100,
+            "best-practices": 100,
+            "seo": 100
+          },
+          "metrics": {
+            "lcpMs": 1371.5044999999996,
+            "cls": 0.0001419627196222269,
+            "tbtMs": 0,
+            "fcpMs": 878.8024749999998
+          }
+        }
+      ],
+      "median": {
+        "scores": {
+          "performance": 95,
+          "accessibility": 100,
+          "best-practices": 100,
+          "seo": 100
+        },
+        "metrics": {
+          "lcpMs": 1368.5575000000003,
+          "cls": 0.0001419627196222269,
+          "tbtMs": 0,
+          "fcpMs": 876.9066250000002
+        }
+      }
+    }
+  ]
+}

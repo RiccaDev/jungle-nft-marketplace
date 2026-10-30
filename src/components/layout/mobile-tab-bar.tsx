@@ -23,19 +23,6 @@ const SCAN_ICON_PARTS = [
   { src: scanPartTopLeft, className: 'inset-[0_56.3%_57%_4.9%]' },
 ]
 
-function UnavailableTab({ label, icon, className }: { label: string; icon: string; className: string }) {
-  return (
-    <button
-      type="button"
-      aria-disabled="true"
-      aria-label={`${label} (${COMING_SOON_LABEL})`}
-      className={`absolute top-[71px] grid size-5 place-items-center ${className}`}
-    >
-      <img src={icon} alt="" width={20} height={20} />
-    </button>
-  )
-}
-
 export function MobileTabBar() {
   // Market screens replace the tab bar with their own bottom action bar.
   const isMarketRoute = useIsMarketRoute()
@@ -59,7 +46,9 @@ export function MobileTabBar() {
         >
           <img src={homeIcon} alt="" className="absolute inset-[8.33%_10.42%] block" />
         </Link>
-        <UnavailableTab label="Favoritos" icon={heartIcon} className="left-[26.09%]" />
+        <Link to="/perfil/favoritos" aria-label="Favoritos" className="absolute top-[71px] left-[26.09%] grid size-5 place-items-center">
+          <img src={heartIcon} alt="" width={20} height={20} />
+        </Link>
 
         <button
           type="button"

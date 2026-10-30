@@ -5,10 +5,6 @@ import { useAddCartItem, useCart, useRemoveCartItem } from '@/features/cart/use-
 import type { NftEditionTier } from '@/features/nfts/nft.contracts'
 import { readApiError } from '@/lib/http/api-error'
 
-export type NftActionState<Run extends (...args: never[]) => void> =
-  | { status: 'available'; run: Run }
-  | { status: 'unavailable'; reason: string }
-
 export type NftCartActions = {
   quantityInCart: number
   isAdding: boolean
@@ -73,11 +69,5 @@ export function useNftDetailActions({ nftId, editionTier, quantity, onAdded }: U
     },
   }
 
-  // Favorites still depend on a flow that does not exist yet.
-  const favorite: NftActionState<(nftId: string) => void> = {
-    status: 'unavailable',
-    reason: 'Favoritos serão habilitados em uma próxima etapa.',
-  }
-
-  return { cart, favorite }
+  return { cart }
 }

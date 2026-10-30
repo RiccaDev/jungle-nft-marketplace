@@ -105,7 +105,7 @@ Cada NFT tem 4 edições (`one-of-one`, `one-of-ten`, `one-of-fifty`, `open`, ex
 
 ### Ações de compra e favoritos
 
-`useNftDetailActions()` é o ponto de integração: devolve, para cada ação, `{ status: 'available', run }` ou `{ status: 'unavailable', reason }`. Hoje ambas estão indisponíveis (carrinho e login não existem). Os botões são renderizados com `aria-disabled`, descrição via `aria-describedby` e o motivo visível na tela; clicar não faz nada. A seleção que será enviada ao carrinho já tem tipo próprio (`NftPurchaseSelection`).
+`useNftDetailActions()` devolve a ação de carrinho usada por "COMPRAR". Favoritar usa o `FavoriteButton` compartilhado com o card (veja "Favoritos").
 
 ### Galeria
 
@@ -490,6 +490,52 @@ O Figma MCP não estava disponível e não há metadados salvos dos frames de pe
 - Paginação do histórico de pedidos (lista completa).
 - Expiração de sessão durante o checkout continua sem preservar o formulário (pendência da Etapa 7).
 
+## Favoritos
+
+Favoritos pertencem ao usuário autenticado e ficam na API simulada (`kurio-mock:favorites:v1`, mapa `userId → [{ nftId, addedAt }]`, mais recente primeiro). O cliente lê a lista com TanStack Query na chave privada `['private', userId, 'favorites']`, então logout e troca de usuário descartam o cache como nas demais consultas privadas.
+
+| Método | Caminho | Resposta |
+| ------ | ------- | -------- |
+| GET    | `/api/me/favorites` | 200 `{ items: NftSummary[] }` · 401 |
+| POST   | `/api/me/favorites` `{ nftId }` | 200 `{ items }` (idempotente) · 404 `NFT_NOT_FOUND` · 401 |
+| DELETE | `/api/me/favorites/:nftId` | 200 `{ items }` (idempotente) · 401 |
+
+As respostas montam os resumos a partir do estado atual do catálogo, então preço e estoque refletem `nft.updated`. As três rotas aceitam as condições de rede (`__KURIO_NETWORK_CONDITIONS__`).
+
+- **`FavoriteButton`** (`features/favorites/components`) é usado no card (ícone sobre a arte, acima do link esticado do card) e no detalhe (ícone no mobile, botão "Favoritar" no desktop). O nome acessível é fixo e o estado sai em `aria-pressed`.
+- **Atualização otimista:** `useToggleFavorite` cancela a consulta, aplica a mudança, devolve o snapshot em caso de erro e grava a lista do servidor no sucesso. Rollback e sucesso só são aplicados se o dono da mutação ainda for o usuário da sessão.
+- **Durante o envio** o botão fica com `aria-busy` e `aria-disabled` (não `disabled`), para o foco do teclado não se perder.
+- **Erros** aparecem em `role="alert"` (visível no botão com texto, `sr-only` no ícone). 401 segue o fluxo global de sessão expirada.
+- **Visitante:** o clique leva a `/entrar?redirect=<rota atual>`, sem simular sucesso.
+- **Lista:** `/perfil/favoritos` (aba do perfil e coração da tab bar mobile).
+
+## Qualidade: regressão visual, teclado e Lighthouse
+
+### Regressão visual
+
+`e2e/visual.spec.ts` compara capturas de página inteira de Home, Detalhe, Carrinho e Pagamento nos dois projetos (8 baselines em `e2e/visual.spec.ts-snapshots/`). Para serem determinísticas: `reducedMotion: 'reduce'`, `animations: 'disabled'`, cursor oculto, espera por `networkidle`, `document.fonts.ready` e decodificação de todas as imagens (imagens `lazy` são trocadas para `eager` só na captura). Os dados vêm das fixtures, e cada teste começa com armazenamento limpo. Baselines só devem ser atualizadas depois de revisar o diff (`npm run test:visual -- --update-snapshots`).
+
+### Teclado e foco
+
+`e2e/keyboard.spec.ts` cobre: link "Pular para o conteúdo" como primeiro Tab, levando o foco ao `<main>` (`tabIndex={-1}`); foco preso no zoom da galeria e devolvido ao gatilho no Escape; favoritar pelo teclado mantendo o foco; e a gaveta de filtros mobile devolvendo o foco ao botão. Outros testes já verificam foco em erros de formulário (cadastro, checkout, perfil).
+
+### Lighthouse
+
+`npm run audit:lighthouse` (`scripts/lighthouse-audit.mjs`) sobe `vite preview --mode demo` na porta 4174 sobre o `dist/` atual (rodar `npm run build:demo` antes) e audita Home (`/`) e Detalhe (`/nfts/emerald-ape-042`) nas configurações padrão mobile e desktop do Lighthouse, 3 vezes cada. Os relatórios HTML/JSON de cada execução, `summary.json` e `summary.md` (medianas) ficam em `reports/lighthouse/`.
+
+Medição de 30/10/2026 — Lighthouse 13.5.0, Chrome 156 headless, Windows 11, Node 24.18, throttling simulado padrão, servidor local:
+
+| Página | Dispositivo | Performance | Acessibilidade | Boas práticas | SEO | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|---|---|
+| Home | mobile | 79 | 100 | 100 | 100 | 4,43 s | 0,018 | 47 ms |
+| Home | desktop | 96 | 100 | 100 | 100 | 1,32 s | 0,002 | 0 ms |
+| Detalhe | mobile | 78 | 100 | 100 | 100 | 4,62 s | 0 | 14 ms |
+| Detalhe | desktop | 95 | 100 | 100 | 100 | 1,37 s | 0 | 0 ms |
+
+Correções feitas a partir da primeira medição: `public/robots.txt` (o fallback do SPA devolvia HTML; SEO 92 → 100), skeleton do detalhe desktop com a altura da página carregada (o rodapé deslocava; CLS 0,235 → 0) e alvos de toque de 24 px nos indicadores da galeria (Acessibilidade mobile 97 → 100).
+
+**Bloqueio do Performance mobile (meta 90):** a demonstração carrega a API simulada no cliente. Antes da primeira renderização o navegador baixa e executa o chunk do MSW (`browser-*.js`, ~470 KB, ~170 KB gzip) e espera o `worker.start()`; só então importa a aplicação, que busca os dados pela API simulada e depois a imagem do LCP. Com o throttling mobile isso dá FCP ~3,1 s e LCP ~4,5 s. O próprio Lighthouse aponta ~70 KB de JavaScript não usado nesse chunk. Não desligamos os mocks nem medimos um build sem mocks, porque sem eles a aplicação não tem dados. Com uma API real, o chunk do MSW e essa espera não existiriam.
+
 ## Política de cache e retries
 
 | Configuração           | Valor                                     | Motivo                                                           |
@@ -592,7 +638,7 @@ O hero desktop e o mobile (e os layouts do detalhe) são escolhidos com `useMedi
 | Divisor do cabeçalho                    | 0,3 px                                                         | 1 px a 40% de opacidade (traços abaixo de 1 px renderizam de forma inconsistente).                         |
 | Hero mobile                             | Altura fixa de 190 px (frame de 414 px)                         | Altura mínima de 190 px: em 390 px o texto ocupa mais linhas.                                              |
 | Abas mobile                             | Espaço de 4 px entre a 1ª e a 2ª aba                            | 16 px entre todas as abas; a faixa rola horizontalmente se não couber.                                     |
-| Favoritar no card mobile                | Botão de coração                                               | Omitido até a etapa de favoritos (exige autenticação).                                                     |
+| Favoritar no card                       | Coração só no card mobile                                       | Coração em todos os viewports (ícone `Heart` do Lucide), para a ação existir também no desktop.            |
 | Indicadores do carrossel                | Três pontos                                                     | Decorativos (`aria-hidden`), pois há um único slide.                                                       |
 
 #### Detalhe do NFT
@@ -606,7 +652,7 @@ O hero desktop e o mobile (e os layouts do detalhe) são escolhidos com `useMedi
 | Rótulos "Contrato" e "Direitos autorais" | Trocados (o texto de royalties está sob "Contrato" e o endereço sob "Direitos autorais") | Cada rótulo acompanha o conteúdo correspondente.                                         |
 | Edições no mobile                       | "1/10" repetido                                                | As mesmas 4 edições do desktop.                                                                            |
 | Disponibilidade e avisos                | Não desenhados                                                 | Linha de disponibilidade da edição e aviso de alteração em tempo real abaixo da quantidade.               |
-| Compra e favoritos                      | Botões ativos                                                  | Visíveis, com 60% de opacidade, `aria-disabled` e o motivo escrito abaixo.                                 |
+| Indicadores da galeria (mobile, toque)  | Pontos de 7 px a 8 px de distância                              | Cada ponto fica dentro de um botão de 24 px (alvo de toque mínimo); os pontos ficam mais espaçados.        |
 | Aba "Avaliações de colecionadores"      | Aba clicável                                                   | Indisponível (`aria-disabled`): não há conteúdo de avaliações nesta etapa.                                 |
 | Folha de detalhes (mobile)              | Sobrepõe 114 px da imagem                                       | Sobrepõe apenas o fundo (30 px), mantendo a obra inteira visível.                                         |
 | Descrição e relacionados no mobile      | Fora do frame mobile                                            | Exibidos abaixo da folha de detalhes, para não esconder informação em uma largura.                         |
@@ -628,7 +674,7 @@ O hero desktop e o mobile (e os layouts do detalhe) são escolhidos com `useMedi
 
 ### Ações fora do escopo atual
 
-Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucesso: "Criadores", "Aprenda", carrinho, "Entrar", links de perfil e ajuda do rodapé, "Ler mais" do blog e os itens da tab bar mobile (exceto Início) têm `aria-disabled="true"` e o título "Disponível em breve". A newsletter informa que a inscrição não está disponível nesta demonstração. "Mercado", as promoções e as coleções do rodapé levam ao catálogo com o filtro correspondente. No detalhe, comprar, adicionar ao carrinho e favoritar seguem o mesmo princípio (veja "Ações de compra e favoritos"); os links de compartilhamento abrem os serviços reais em nova aba.
+Itens desenhados cuja funcionalidade não existe nesta etapa não simulam sucesso: "Criadores", "Aprenda", carrinho, "Entrar", links de perfil e ajuda do rodapé, "Ler mais" do blog e os itens da tab bar mobile (exceto Início) têm `aria-disabled="true"` e o título "Disponível em breve". A newsletter informa que a inscrição não está disponível nesta demonstração. "Mercado", as promoções e as coleções do rodapé levam ao catálogo com o filtro correspondente. No detalhe, os links de compartilhamento abrem os serviços reais em nova aba.
 
 No fluxo Mercado (`/nfts/*`), o cabeçalho segue o componente do Figma para telas de mercado: "Mercado" ativo e sem o divisor. No mobile, a tab bar dá lugar à barra de compra fixa do frame de detalhe.
 
@@ -661,6 +707,6 @@ Pendente:
 
 - A sessão não é renovada automaticamente: ao fim dos 30 minutos o usuário precisa entrar novamente.
 - O reset dos mocks (`POST /api/__mocks__/reset`) apaga o estado persistido; o estado em memória só é reconstruído na próxima recarga da página.
-- Favoritos continuam indisponíveis.
-- A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); o impacto no carregamento será medido na etapa de Lighthouse.
+- A aplicação é importada dinamicamente após os mocks (veja "Ordem de inicialização"); no mobile isso mantém o Performance do Lighthouse abaixo de 90 (veja "Lighthouse").
+- As baselines visuais foram geradas no Windows (sufixo `win32`); em outro sistema operacional precisam ser geradas e revisadas de novo.
 - As condições de rede (`__KURIO_NETWORK_CONDITIONS__`) cobrem NFTs, carrinho, carteiras e pedidos, mas não a autenticação.

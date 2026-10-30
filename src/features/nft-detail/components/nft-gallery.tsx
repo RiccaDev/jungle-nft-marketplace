@@ -25,7 +25,7 @@ export function NftGallery({ nft, variant }: NftGalleryProps) {
     <ul
       aria-label="Vistas da obra"
       className={cn(
-        variant === 'desktop' ? 'flex flex-col gap-4' : 'flex items-center justify-center gap-2',
+        variant === 'desktop' ? 'flex flex-col gap-4' : 'flex items-center justify-center',
       )}
     >
       {nft.gallery.map((view) => {
@@ -41,11 +41,17 @@ export function NftGallery({ nft, variant }: NftGalleryProps) {
                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                 variant === 'desktop'
                   ? cn('block size-[100px] overflow-hidden rounded-lg border', isSelected ? 'border-primary' : 'border-transparent')
-                  : cn('block h-[7px] rounded-full transition-[width]', isSelected ? 'w-5 bg-primary' : 'w-[7px] bg-primary/40'),
+                  : 'grid h-6 min-w-6 place-items-center px-1',
               )}
             >
-              {variant === 'desktop' && (
+              {variant === 'desktop' ? (
                 <NftGalleryViewImage image={nft.image} view={view} sizes="100px" className="size-full rounded-lg" />
+              ) : (
+                // The dot stays small; the button around it keeps a 24px touch target.
+                <span
+                  aria-hidden="true"
+                  className={cn('block h-[7px] rounded-full transition-[width]', isSelected ? 'w-5 bg-primary' : 'w-[7px] bg-primary/40')}
+                />
               )}
             </button>
           </li>

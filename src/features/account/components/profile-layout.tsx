@@ -96,6 +96,11 @@ export function ProfileLayout({ userId, children }: { userId: string; children: 
               Pedidos
             </Link>
           </li>
+          <li>
+            <Link to="/perfil/favoritos" activeProps={ACTIVE_TAB_PROPS} inactiveProps={INACTIVE_TAB_PROPS} className={TAB_CLASS}>
+              Favoritos
+            </Link>
+          </li>
         </ul>
       </nav>
 

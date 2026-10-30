@@ -2,7 +2,7 @@
 
 Implementação do desafio Frontend da Jungle Gaming. O enunciado original está em [Jungle_Gaming_README_OFICIAL_COMPLETO.md](Jungle_Gaming_README_OFICIAL_COMPLETO.md), e as decisões técnicas estão em [ARCHITECTURE.md](ARCHITECTURE.md).
 
-> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho e cotação (Etapa 6) funcionais, com documentação pendente. **Checkout e pedidos (Etapa 7) funcionais** em `/pagamento` e `/pedidos/:orderId` (`e2e/checkout.spec.ts`). **Perfil, carteiras e histórico de pedidos (Etapa 8) funcionais** em `/perfil`, `/perfil/carteiras` e `/perfil/pedidos` (`e2e/profile.spec.ts`). As telas dessas etapas não foram conferidas com o Figma (MCP indisponível); pendências em "Checkout e pedidos" e "Perfil, carteiras e histórico" no [ARCHITECTURE.md](ARCHITECTURE.md). Favoritos ainda não foram implementados.
+> **Status:** fundação, tempo real (Socket.IO + MSW), Home com catálogo, detalhe do NFT e autenticação concluídos. Carrinho e cotação (Etapa 6) funcionais, com documentação pendente. **Checkout e pedidos (Etapa 7) funcionais** em `/pagamento` e `/pedidos/:orderId` (`e2e/checkout.spec.ts`). **Perfil, carteiras e histórico de pedidos (Etapa 8) funcionais** em `/perfil`, `/perfil/carteiras` e `/perfil/pedidos` (`e2e/profile.spec.ts`). As telas dessas etapas não foram conferidas com o Figma (MCP indisponível); pendências em "Checkout e pedidos" e "Perfil, carteiras e histórico" no [ARCHITECTURE.md](ARCHITECTURE.md). **Favoritos** funcionais no card, no detalhe e em `/perfil/favoritos` (`e2e/favorites.spec.ts`). Regressão visual, testes de teclado e Lighthouse estão em "Qualidade" no [ARCHITECTURE.md](ARCHITECTURE.md); o Performance mobile do Lighthouse (78–79) está abaixo da meta de 90 por causa da API simulada no cliente.
 
 ## Credenciais fictícias
 
@@ -24,6 +24,7 @@ Contas existem apenas na API simulada. O código guarda somente hashes com salt;
 | `/perfil`       | Privada: dados do perfil, avatar e senha.                                                  |
 | `/perfil/carteiras` | Privada: carteiras principal e secundária (cadastro, edição, tornar principal).       |
 | `/perfil/pedidos` | Privada: histórico de pedidos com link para os recibos.                                  |
+| `/perfil/favoritos` | Privada: NFTs favoritados pelo usuário.                                               |
 | `/carrinho`     | Carrinho: quantidades, remoção, cupom e cotação da API.                                    |
 | `/pagamento`    | Privada: dados do colecionador, carteira e rede, revisão e envio idempotente do pedido.   |
 | `/pedidos/:orderId` | Privada: pedido pendente, confirmado (recibo com transação simulada) ou recusado.     |
@@ -69,6 +70,8 @@ Sem `VITE_ENABLE_MOCKS=true`, o código do MSW não é incluído no bundle.
 | `npm run test:e2e`        | Testes Playwright sobre o build de demonstração.                 |
 | `npm run test:e2e:ui`     | Playwright em modo interativo.                                   |
 | `npm run test:e2e:report` | Abre o último relatório HTML.                                    |
+| `npm run test:visual`     | Só a regressão visual (`--update-snapshots` após revisar o diff). |
+| `npm run audit:lighthouse` | Lighthouse em Home e Detalhe, mobile e desktop, 3 execuções (rodar `build:demo` antes). |
 
 ## Testes E2E
 
@@ -87,7 +90,10 @@ O relatório HTML fica em `playwright-report/`, e os traces das falhas ficam em 
 | `e2e/auth.spec.ts`       | Cadastro (validação, conflitos de usuário/e-mail), login inválido/válido, rota privada com retorno ao destino, refresh, logout, troca de usuário sem vazamento (e novo handshake do socket), sessão expirada durante a navegação e após refresh, 401 sem sessão (desktop); páginas e tab bar (mobile). |
 | `e2e/checkout.spec.ts`   | Compra completa até o recibo confirmado via `order.updated` (snapshot imune a alterações posteriores), novo preço via Socket.IO exigindo aceite, `409 QUOTE_CHANGED` durante o envio, recusa/aprovação/desconexão da carteira, pagamento recusado (carrinho e estoque preservados), timeout após a criação com recuperação do mesmo pedido, clique duplo e reenvios com a mesma chave, refresh e reconexão do socket com pedido pendente, isolamento Ana × Bruno (desktop); login exigido e compra completa (mobile). |
 | `e2e/profile.spec.ts`    | Edição do perfil com conflitos e persistência após F5 (cabeçalho e novo login), sessão expirada ao salvar, avatar (validação no cliente e na API, pré-visualização, persistência, remoção), troca de senha (atual incorreta, confirmação, login só com a nova), cadastro/edição/troca de principal de carteiras com uso no checkout e bloqueio por pedido pendente, histórico com estados/recibos/erro e nova tentativa, isolamento Ana × Bruno com resposta atrasada e 401 atrasado da sessão anterior (desktop); perfil, carteira e pedidos pela tab bar sem overflow (mobile). |
-| `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, ações indisponíveis, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
+| `e2e/nft-detail.spec.ts` | Navegação a partir do card, acesso direto, refresh, relacionados, 404, edições e limites de quantidade, edição/NFT esgotado, favoritar como visitante, `nft.updated` no detalhe e no catálogo, eventos duplicados/antigos, estoque caindo em tempo real, skeleton/erro/nova tentativa (desktop); barra de compra e voltar (mobile). |
+| `e2e/favorites.spec.ts`  | Visitante levado ao login, favoritar/desfavoritar no card e no detalhe com persistência após F5, rollback quando a API falha, isolamento Ana × Bruno. |
+| `e2e/keyboard.spec.ts`   | Link para o conteúdo, foco preso e devolvido no zoom da galeria, favoritar pelo teclado; gaveta de filtros devolvendo o foco (mobile). |
+| `e2e/visual.spec.ts`     | Regressão visual (`toHaveScreenshot`) de Home, Detalhe, Carrinho e Pagamento, desktop e mobile. Baselines geradas no Windows. |
 
 ## Validando a autenticação no navegador
 

@@ -20,24 +20,29 @@ export function NftDetailSkeleton({ variant }: { variant: 'desktop' | 'mobile' }
     )
   }
 
+  // Mirrors the loaded page down to the related section, so the footer does not shift into view.
   return (
-    <div aria-hidden="true" data-testid="nft-detail-skeleton" className="flex flex-col gap-3 lg:flex-row lg:gap-8">
-      <div className="flex shrink-0 items-center gap-7">
-        <div className="flex flex-col gap-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="size-[100px] rounded-lg" />
-          ))}
+    <div aria-hidden="true" data-testid="nft-detail-skeleton" className="flex flex-col gap-24">
+      <div className="flex flex-col gap-3 lg:flex-row lg:gap-8">
+        <div className="flex shrink-0 items-center gap-7">
+          <div className="flex flex-col gap-4">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="size-[100px] rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="size-[444px] rounded-md" />
         </div>
-        <Skeleton className="size-[444px] rounded-md" />
+        <div className="flex flex-1 flex-col gap-6 py-2">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-6 w-1/3" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-7 w-1/2" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-20 w-2/3" />
+        </div>
       </div>
-      <div className="flex flex-1 flex-col gap-6 py-2">
-        <Skeleton className="h-8 w-3/4" />
-        <Skeleton className="h-6 w-1/3" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-7 w-1/2" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-20 w-2/3" />
-      </div>
+      <Skeleton className="h-[220px] w-full" />
+      <Skeleton className="h-[360px] w-full" />
     </div>
   )
 }

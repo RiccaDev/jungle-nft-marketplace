@@ -1,8 +1,7 @@
-import { useId } from 'react'
 import mobileCartIcon from '@/assets/figma/detail/mobile-cart.svg'
-import mobileFavoriteIcon from '@/assets/figma/detail/mobile-favorite.svg'
 import { BackButton } from '@/components/back-button'
 import { QuantityStepper } from '@/components/quantity-stepper'
+import { FavoriteButton } from '@/features/favorites/components/favorite-button'
 import { formatEth } from '@/lib/eth/eth-amount'
 import { AvailabilityStatus } from './availability-status'
 import { CartLineStatus } from './cart-line-status'
@@ -13,13 +12,8 @@ import { NftGallery } from './nft-gallery'
 import { NftRatingBadge } from './nft-rating'
 import { NftTokenInfo } from './nft-token-info'
 import { RelatedNftsSection } from './related-nfts-section'
-import { UnavailableActionButton } from './unavailable-action-button'
 
-const ROUND_ICON_BUTTON_CLASS =
-  'grid size-[35px] place-items-center rounded-full border border-border bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
-
-export function MobileNftDetail({ nft, selection, cart, favorite, changeNotice }: NftDetailLayoutProps) {
-  const favoriteReasonId = useId()
+export function MobileNftDetail({ nft, selection, cart, changeNotice }: NftDetailLayoutProps) {
   const canPurchase = selection.quantity > 0 && !cart.isAdding
 
   return (
@@ -27,14 +21,7 @@ export function MobileNftDetail({ nft, selection, cart, favorite, changeNotice }
       <div className="bg-[linear-gradient(137.6deg,var(--gm-surface-card)_12%,var(--gm-surface-raised)_106.6%)] px-7 pt-6 pb-[60px]">
         <div className="mb-2 flex items-center justify-between">
           <BackButton />
-          <UnavailableActionButton reasonId={favoriteReasonId} label="Favoritar" className={ROUND_ICON_BUTTON_CLASS}>
-            <img src={mobileFavoriteIcon} alt="" width={16} height={14} />
-          </UnavailableActionButton>
-          {favorite.status === 'unavailable' && (
-            <span id={favoriteReasonId} className="sr-only">
-              {favorite.reason}
-            </span>
-          )}
+          <FavoriteButton nft={nft} variant="icon" />
         </div>
         <NftGallery nft={nft} variant="mobile" />
       </div>

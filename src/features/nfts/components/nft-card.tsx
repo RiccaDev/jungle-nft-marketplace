@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { FavoriteButton } from '@/features/favorites/components/favorite-button'
 import { formatEth } from '@/lib/eth/eth-amount'
 import type { NftSummary } from '../nft.contracts'
 
@@ -35,6 +36,7 @@ export function NftCard({ nft, isAboveTheFold = false }: NftCardProps) {
             RARO
           </span>
         )}
+        <FavoriteButton nft={nft} variant="icon" className="absolute top-3 right-3" />
       </div>
 
       <div className="flex flex-col gap-1.5 pl-2 md:pl-0">

@@ -43,7 +43,7 @@ function RootLayout() {
         <SessionExpiredBanner onDismiss={dismissExpiredSessionNotice} />
       )}
       {mergeNotice && <NoticeBanner onDismiss={dismissMergeNotice}>{mergeNotice}</NoticeBanner>}
-      <main id="conteudo" className={cn('md:pb-0', isMarketRoute ? 'pb-[200px]' : 'pb-[150px]')}>
+      <main id="conteudo" tabIndex={-1} className={cn('outline-none md:pb-0', isMarketRoute ? 'pb-[200px]' : 'pb-[150px]')}>
         <Outlet />
       </main>
       <SiteFooter />

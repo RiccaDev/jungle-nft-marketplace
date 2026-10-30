@@ -31,7 +31,7 @@ function NftDetailContent({ nft, urlEditionTier, isDesktop }: NftDetailContentPr
       void navigate({ search: { edition }, replace: true, resetScroll: false }),
     getQuantityInCart: useCartQuantityLookup(nft.id),
   })
-  const { cart, favorite } = useNftDetailActions({
+  const { cart } = useNftDetailActions({
     nftId: nft.id,
     editionTier: selection.selectedEditionTier,
     quantity: selection.quantity,
@@ -39,7 +39,7 @@ function NftDetailContent({ nft, urlEditionTier, isDesktop }: NftDetailContentPr
   })
 
   const Layout = isDesktop ? DesktopNftDetail : MobileNftDetail
-  return <Layout nft={nft} selection={selection} cart={cart} favorite={favorite} changeNotice={changeNotice} />
+  return <Layout nft={nft} selection={selection} cart={cart} changeNotice={changeNotice} />
 }
 
 export function NftDetailPage() {

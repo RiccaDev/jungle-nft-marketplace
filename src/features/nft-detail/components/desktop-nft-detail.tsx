@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { QuantityStepper } from '@/components/quantity-stepper'
 import type { NftDetail } from '@/features/nfts/nft.contracts'
 import { formatEth } from '@/lib/eth/eth-amount'
-import type { NftActionState, NftCartActions } from '../nft-detail-actions'
+import type { NftCartActions } from '../nft-detail-actions'
 import type { NftPurchaseSelectionState } from '../use-nft-purchase-selection'
 import { AvailabilityStatus } from './availability-status'
 import { CartLineStatus } from './cart-line-status'
@@ -19,7 +19,6 @@ export type NftDetailLayoutProps = {
   nft: NftDetail
   selection: NftPurchaseSelectionState
   cart: NftCartActions
-  favorite: NftActionState<(nftId: string) => void>
   changeNotice: string | null
 }
 
@@ -43,7 +42,7 @@ function NftDetailBreadcrumb() {
   )
 }
 
-export function DesktopNftDetail({ nft, selection, cart, favorite, changeNotice }: NftDetailLayoutProps) {
+export function DesktopNftDetail({ nft, selection, cart, changeNotice }: NftDetailLayoutProps) {
   return (
     <div className="page-container mt-8 flex flex-col gap-24">
       <div className="flex flex-col gap-3">
@@ -85,7 +84,7 @@ export function DesktopNftDetail({ nft, selection, cart, favorite, changeNotice 
                   onDecrease={selection.decreaseQuantity}
                   onIncrease={selection.increaseQuantity}
                 />
-                <NftPurchaseActions cart={cart} favorite={favorite} canPurchase={selection.quantity > 0} />
+                <NftPurchaseActions nft={nft} cart={cart} canPurchase={selection.quantity > 0} />
               </div>
               <AvailabilityStatus nft={nft} selection={selection} changeNotice={changeNotice} />
               <CartLineStatus cart={cart} />

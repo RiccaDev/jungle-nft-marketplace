@@ -127,15 +127,13 @@ test.describe('detalhe do NFT no desktop', () => {
     )
   })
 
-  test('deixa favoritos indisponíveis, sem simular sucesso', async ({ page }) => {
+  test('expõe favoritar como botão alternável, sem simular sucesso para visitantes', async ({ page }) => {
     await page.goto('/nfts/emerald-ape-042')
 
-    const favoriteButton = page.getByRole('button', { name: 'Favoritar' })
-    await expect(favoriteButton).toHaveAttribute('aria-disabled', 'true')
-    await expect(favoriteButton).toHaveAccessibleDescription(/Favoritos serão habilitados/)
-    // Playwright treats aria-disabled as non-actionable; force proves a real click is inert.
-    await favoriteButton.click({ force: true })
-    await expect(page).toHaveURL(/\/nfts\/emerald-ape-042$/)
+    const favoriteButton = page.getByTestId('favorite-button').filter({ visible: true }).first()
+    await expect(favoriteButton).toHaveAttribute('aria-pressed', 'false')
+    await favoriteButton.click()
+    await expect(page).toHaveURL(/\/entrar\?redirect=%2Fnfts%2Femerald-ape-042$/)
   })
 
   test('aplica nft.updated no detalhe e ignora eventos duplicados ou antigos', async ({ page }) => {
